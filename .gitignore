@@ -15,3 +15,8 @@ best_gan.json
 
 # macOS
 .DS_Store
+
+# PyInstaller artifacts
+build/
+dist/
+*.spec
