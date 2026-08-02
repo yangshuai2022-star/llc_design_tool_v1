@@ -51,6 +51,7 @@ jobs:
 
       - name: Smoke test (import check on packaged app)
         run: ls -la "${{ matrix.app-dir }}"
+        shell: bash
 
       - name: Zip macOS app
         if: runner.os == 'macOS'
