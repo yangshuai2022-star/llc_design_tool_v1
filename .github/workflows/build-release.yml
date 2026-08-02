@@ -74,3 +74,20 @@ jobs:
         with:
           files: ${{ matrix.zip-name }}
           generate_release_notes: true
+          body: |
+            Power Design Toolkit 双平台安装包 (自动构建)
+
+            ## Windows 11
+            1. 解压 `PowerDesignTool-Windows-x64.zip`
+            2. 双击 `PowerDesignTool.exe` 即可运行
+
+            ## macOS (Apple Silicon)
+            1. 解压 `PowerDesignTool-macOS-arm64.zip`
+            2. 若提示 "Apple 无法验证" / "已损坏":
+               - 终端执行 `xattr -cr /Applications/PowerDesignTool.app`
+               - 或右键点击 `PowerDesignTool.app` 选 "打开" → 再点 "打开"
+            3. 双击 `PowerDesignTool.app` 启动
+
+            ## 使用
+            - 启动后先选择 LLC 或 PFC 工作区, 工具栏可随时切换
+            - 命令行版: `pfc-control-lab --output output/pfc_control_lab`
