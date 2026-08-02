@@ -1,0 +1,93 @@
+{
+  "metadata": {
+    "status": "standard_geometry_reference_library",
+    "warning": "Geometry values are engineering reference values for early design and automated screening. Verify the exact core half, bobbin, effective parameters, tolerances and available gap against the selected manufacturer ordering code.",
+    "families": ["PQ", "EE/E", "EC", "EER", "ETD"]
+  },
+  "cores": [
+    {
+      "part_number": "PQ35_35_N97_REF", "shape": "PQ35/35", "family": "PQ", "manufacturer": "TDK/EPCOS-class", "standard": "PQ35/35", "material_key": "TDK_N97_REF", "purposes": ["transformer"],
+      "ae_mm2": 160.0, "amin_mm2": 142.0, "aw_mm2": 175.0, "ve_mm3": 23800.0, "le_mm": 74.0,
+      "window_width_mm": 21.5, "window_height_mm": 10.6, "mlt_primary_mm": 78.0, "mlt_secondary_mm": 70.0, "center_leg_width_mm": 14.0,
+      "thermal_resistance_k_per_w": 12.0, "core_mass_g": 74.0, "cost_usd": 5.5
+    },
+    {
+      "part_number": "PQ40_REF", "shape": "PQ40/40", "family": "PQ", "manufacturer": "TDK/EPCOS-class", "standard": "PQ40/40", "material_key": "TDK_N97_REF", "purposes": ["transformer", "inductor"],
+      "ae_mm2": 201.0, "amin_mm2": 181.0, "aw_mm2": 245.0, "ve_mm3": 36000.0, "le_mm": 96.0,
+      "window_width_mm": 25.0, "window_height_mm": 13.5, "mlt_primary_mm": 92.0, "mlt_secondary_mm": 84.0, "center_leg_width_mm": 16.0,
+      "thermal_resistance_k_per_w": 10.0, "core_mass_g": 110.0, "cost_usd": 7.0
+    },
+    {
+      "part_number": "PQ50_REF", "shape": "PQ50/50", "family": "PQ", "manufacturer": "TDK/EPCOS-class", "standard": "PQ50/50", "material_key": "TDK_N97_REF", "purposes": ["transformer", "inductor"],
+      "ae_mm2": 328.0, "amin_mm2": 295.0, "aw_mm2": 390.0, "ve_mm3": 69000.0, "le_mm": 122.0,
+      "window_width_mm": 32.0, "window_height_mm": 17.0, "mlt_primary_mm": 116.0, "mlt_secondary_mm": 104.0, "center_leg_width_mm": 20.0,
+      "thermal_resistance_k_per_w": 7.5, "core_mass_g": 205.0, "cost_usd": 11.0
+    },
+    {
+      "part_number": "E42_IND_REF", "shape": "E42/21/15", "family": "EE", "manufacturer": "TDK/EPCOS-class", "standard": "E42/21/15", "material_key": "TDK_N97_REF", "purposes": ["transformer", "inductor"],
+      "ae_mm2": 178.0, "amin_mm2": 160.0, "aw_mm2": 210.0, "ve_mm3": 24000.0, "le_mm": 97.0,
+      "window_width_mm": 27.0, "window_height_mm": 12.0, "mlt_primary_mm": 91.0, "mlt_secondary_mm": 86.0, "center_leg_width_mm": 14.5,
+      "thermal_resistance_k_per_w": 11.0, "core_mass_g": 78.0, "cost_usd": 5.0
+    },
+    {
+      "part_number": "E55_IND_REF", "shape": "E55/28/21", "family": "EE", "manufacturer": "TDK/EPCOS-class", "standard": "E55/28/21", "material_key": "TDK_N97_REF", "purposes": ["transformer", "inductor"],
+      "ae_mm2": 354.0, "amin_mm2": 318.0, "aw_mm2": 390.0, "ve_mm3": 65000.0, "le_mm": 128.0,
+      "window_width_mm": 36.0, "window_height_mm": 16.0, "mlt_primary_mm": 119.0, "mlt_secondary_mm": 112.0, "center_leg_width_mm": 20.5,
+      "thermal_resistance_k_per_w": 7.5, "core_mass_g": 190.0, "cost_usd": 9.0
+    },
+    {
+      "part_number": "E65_32_27_N87_REF", "shape": "E65/32/27", "family": "EE", "manufacturer": "TDK/EPCOS-class", "standard": "E65/32/27", "material_key": "TDK_N87_REF", "purposes": ["transformer", "inductor"],
+      "ae_mm2": 535.0, "amin_mm2": 480.0, "aw_mm2": 535.0, "ve_mm3": 113000.0, "le_mm": 147.0,
+      "window_width_mm": 42.0, "window_height_mm": 19.5, "mlt_primary_mm": 143.0, "mlt_secondary_mm": 134.0, "center_leg_width_mm": 26.0,
+      "thermal_resistance_k_per_w": 5.8, "core_mass_g": 330.0, "cost_usd": 15.0
+    },
+    {
+      "part_number": "E70_33_32_N97_REF", "shape": "E70/33/32", "family": "EE", "manufacturer": "TDK/EPCOS-class", "standard": "E70/33/32", "material_key": "TDK_N97_REF", "purposes": ["transformer", "inductor"],
+      "ae_mm2": 683.0, "amin_mm2": 615.0, "aw_mm2": 650.0, "ve_mm3": 150000.0, "le_mm": 160.0,
+      "window_width_mm": 46.0, "window_height_mm": 21.0, "mlt_primary_mm": 157.0, "mlt_secondary_mm": 147.0, "center_leg_width_mm": 30.0,
+      "thermal_resistance_k_per_w": 4.9, "core_mass_g": 430.0, "cost_usd": 19.0
+    },
+    {
+      "part_number": "EC41_N97_REF", "shape": "EC41", "family": "EC", "manufacturer": "Ferroxcube/TDK-class", "standard": "EC41", "material_key": "TDK_N97_REF", "purposes": ["transformer", "inductor"],
+      "ae_mm2": 158.0, "amin_mm2": 142.0, "aw_mm2": 225.0, "ve_mm3": 25800.0, "le_mm": 82.0,
+      "window_width_mm": 25.0, "window_height_mm": 12.5, "mlt_primary_mm": 88.0, "mlt_secondary_mm": 80.0, "center_leg_width_mm": 14.0,
+      "thermal_resistance_k_per_w": 11.5, "core_mass_g": 82.0, "cost_usd": 5.5
+    },
+    {
+      "part_number": "EC52_N97_REF", "shape": "EC52", "family": "EC", "manufacturer": "Ferroxcube/TDK-class", "standard": "EC52", "material_key": "TDK_N97_REF", "purposes": ["transformer", "inductor"],
+      "ae_mm2": 285.0, "amin_mm2": 257.0, "aw_mm2": 390.0, "ve_mm3": 63000.0, "le_mm": 116.0,
+      "window_width_mm": 35.0, "window_height_mm": 16.0, "mlt_primary_mm": 116.0, "mlt_secondary_mm": 106.0, "center_leg_width_mm": 20.0,
+      "thermal_resistance_k_per_w": 7.8, "core_mass_g": 185.0, "cost_usd": 9.5
+    },
+    {
+      "part_number": "EC70_3C95_REF", "shape": "EC70", "family": "EC", "manufacturer": "Ferroxcube-class", "standard": "EC70", "material_key": "FERROXCUBE_3C95_REF", "purposes": ["transformer", "inductor"],
+      "ae_mm2": 650.0, "amin_mm2": 585.0, "aw_mm2": 720.0, "ve_mm3": 157000.0, "le_mm": 165.0,
+      "window_width_mm": 49.0, "window_height_mm": 22.0, "mlt_primary_mm": 163.0, "mlt_secondary_mm": 151.0, "center_leg_width_mm": 30.0,
+      "thermal_resistance_k_per_w": 4.7, "core_mass_g": 450.0, "cost_usd": 21.0
+    },
+    {
+      "part_number": "EER49_REF", "shape": "EER49", "family": "EER", "manufacturer": "industry-standard", "standard": "EER49", "material_key": "TDK_N97_REF", "purposes": ["transformer", "inductor"],
+      "ae_mm2": 250.0, "amin_mm2": 225.0, "aw_mm2": 360.0, "ve_mm3": 53000.0, "le_mm": 110.0,
+      "window_width_mm": 31.0, "window_height_mm": 16.0, "mlt_primary_mm": 108.0, "mlt_secondary_mm": 96.0, "center_leg_width_mm": 19.0,
+      "thermal_resistance_k_per_w": 8.5, "core_mass_g": 155.0, "cost_usd": 9.0
+    },
+    {
+      "part_number": "EER54_REF", "shape": "EER54", "family": "EER", "manufacturer": "industry-standard", "standard": "EER54", "material_key": "TDK_N97_REF", "purposes": ["transformer", "inductor"],
+      "ae_mm2": 353.0, "amin_mm2": 318.0, "aw_mm2": 470.0, "ve_mm3": 82000.0, "le_mm": 132.0,
+      "window_width_mm": 36.0, "window_height_mm": 18.5, "mlt_primary_mm": 126.0, "mlt_secondary_mm": 112.0, "center_leg_width_mm": 22.0,
+      "thermal_resistance_k_per_w": 6.5, "core_mass_g": 235.0, "cost_usd": 13.0
+    },
+    {
+      "part_number": "ETD49_REF", "shape": "ETD49", "family": "ETD", "manufacturer": "TDK/EPCOS-class", "standard": "ETD49", "material_key": "TDK_N87_REF", "purposes": ["transformer", "inductor"],
+      "ae_mm2": 211.0, "amin_mm2": 190.0, "aw_mm2": 300.0, "ve_mm3": 37000.0, "le_mm": 114.0,
+      "window_width_mm": 30.0, "window_height_mm": 14.0, "mlt_primary_mm": 104.0, "mlt_secondary_mm": 94.0, "center_leg_width_mm": 17.0,
+      "thermal_resistance_k_per_w": 9.0, "core_mass_g": 120.0, "cost_usd": 8.0
+    },
+    {
+      "part_number": "ETD59_REF", "shape": "ETD59", "family": "ETD", "manufacturer": "TDK/EPCOS-class", "standard": "ETD59", "material_key": "TDK_N87_REF", "purposes": ["transformer", "inductor"],
+      "ae_mm2": 368.0, "amin_mm2": 331.0, "aw_mm2": 450.0, "ve_mm3": 76000.0, "le_mm": 139.0,
+      "window_width_mm": 38.0, "window_height_mm": 17.0, "mlt_primary_mm": 128.0, "mlt_secondary_mm": 114.0, "center_leg_width_mm": 22.0,
+      "thermal_resistance_k_per_w": 6.8, "core_mass_g": 220.0, "cost_usd": 12.0
+    }
+  ]
+}

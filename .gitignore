@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+
+# Outputs (regenerable calculation results)
+output/
+
+# Per-project custom parameters (regenerable via custom_input.py)
+llc_custom.json
+best_gan.json
+
+# macOS
+.DS_Store

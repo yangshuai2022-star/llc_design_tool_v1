@@ -1,0 +1,41 @@
+[project]
+name = "power-design-toolkit"
+version = "0.8.0"
+description = "PFC and LLC resonant converter engineering design calculators"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "matplotlib>=3.7",
+    "pandas>=2.0",
+    "click>=8.1",
+    "rich>=13.0",
+    "fpdf2>=2.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "pytest-cov", "mypy", "ruff"]
+gui = ["PySide6>=6.7", "pyqtgraph>=0.13.7"]
+
+[project.scripts]
+pfc-design = "pfc_design.__main__:cli"
+pfc-control-lab = "pfc_design.control_cli:cli"
+llc-design = "llc_design.__main__:cli"
+llc-gui = "llc_design.gui.app:run_gui"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pfc_design*", "llc_design*"]
+exclude = ["*.output*", "*.__pycache__*"]
+
+[tool.setuptools.package-data]
+"pfc_design.data" = ["*.json"]
+"llc_design.data" = ["*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["pfc_design/tests", "llc_design/tests"]
+addopts = "-q"

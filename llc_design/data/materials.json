@@ -1,0 +1,61 @@
+{
+  "metadata": {
+    "status": "engineering_reference_curves",
+    "warning": "The bundled material coefficients are reference fits intended for comparative optimization. Replace them with coefficients fitted from the exact manufacturer loss curves, core lot and temperature range before production release.",
+    "models": ["Steinmetz", "iGSE arbitrary waveform", "temperature interpolation"]
+  },
+  "materials": [
+    {
+      "key": "TDK_N87_REF", "manufacturer": "TDK/EPCOS", "grade": "N87",
+      "mu_i_25": 2200.0,
+      "bsat_points": [[25.0, 0.49], [100.0, 0.39], [120.0, 0.36]],
+      "steinmetz_points": [
+        [25.0, 3.70, 1.43, 2.72],
+        [60.0, 3.25, 1.43, 2.72],
+        [100.0, 3.00, 1.43, 2.72],
+        [120.0, 3.20, 1.43, 2.72]
+      ],
+      "frequency_range_hz": [20000.0, 500000.0], "flux_range_t": [0.02, 0.30],
+      "core_loss_correction": 1.00
+    },
+    {
+      "key": "TDK_N97_REF", "manufacturer": "TDK/EPCOS", "grade": "N97",
+      "mu_i_25": 2300.0,
+      "bsat_points": [[25.0, 0.49], [100.0, 0.39], [120.0, 0.36]],
+      "steinmetz_points": [
+        [25.0, 2.75, 1.45, 2.70],
+        [60.0, 2.35, 1.45, 2.70],
+        [100.0, 2.10, 1.45, 2.70],
+        [120.0, 2.30, 1.45, 2.70]
+      ],
+      "frequency_range_hz": [25000.0, 500000.0], "flux_range_t": [0.02, 0.30],
+      "core_loss_correction": 1.00
+    },
+    {
+      "key": "FERROXCUBE_3C95_REF", "manufacturer": "Ferroxcube", "grade": "3C95",
+      "mu_i_25": 3000.0,
+      "bsat_points": [[25.0, 0.50], [100.0, 0.40], [120.0, 0.37]],
+      "steinmetz_points": [
+        [25.0, 2.60, 1.46, 2.72],
+        [60.0, 2.20, 1.46, 2.72],
+        [100.0, 2.00, 1.46, 2.72],
+        [120.0, 2.20, 1.46, 2.72]
+      ],
+      "frequency_range_hz": [25000.0, 400000.0], "flux_range_t": [0.02, 0.30],
+      "core_loss_correction": 1.00
+    },
+    {
+      "key": "TDK_PC95_REF", "manufacturer": "TDK", "grade": "PC95-class",
+      "mu_i_25": 3300.0,
+      "bsat_points": [[25.0, 0.51], [100.0, 0.41], [120.0, 0.38]],
+      "steinmetz_points": [
+        [25.0, 2.35, 1.48, 2.70],
+        [60.0, 2.00, 1.48, 2.70],
+        [100.0, 1.85, 1.48, 2.70],
+        [120.0, 2.05, 1.48, 2.70]
+      ],
+      "frequency_range_hz": [50000.0, 500000.0], "flux_range_t": [0.02, 0.25],
+      "core_loss_correction": 1.00
+    }
+  ]
+}
