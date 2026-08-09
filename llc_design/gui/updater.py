@@ -15,7 +15,7 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QLabel, QMessageBox, QToolButton
 
 #: 与 pyproject.toml / GitHub tag 保持一致的当前版本号。
-APP_VERSION = "7.3.0"
+APP_VERSION = "7.4.0"
 
 GITHUB_REPO = "yangshuai2022-star/llc_design_tool_v1"
 RELEASES_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"

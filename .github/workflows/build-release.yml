@@ -78,14 +78,16 @@ jobs:
           files: ${{ matrix.zip-name }}
           generate_release_notes: true
           body: |
-            Power Design Toolkit V7.3 双平台安装包（自动构建）
+            Power Design Toolkit V7.4 双平台安装包（自动构建）
 
-            ## V7.3 主要功能
-            - TTPL/Vienna 新增 PFC 电感设计页（Magnetics High Flux Core Data 254、
+            ## V7.4 主要功能
+            - 新增"检查更新": 后台联网查询 GitHub 最新 Release, 有新版本时展示
+              发布说明并提供下载页跳转; 启动后自动静默检查
+            - 工具栏右上角新增联系方式: 邮箱 maileyang@qq.com / 微信 maileyang
+            - TTPL/Vienna PFC 电感设计页（Magnetics High Flux Core Data 254、
               直流偏置磁导率跌落与磁芯损耗拟合、满载 L(I) 曲线、漆包铜线热态 DCR/直流 I²R 铜损、
               一键回写功率级参数）
-            - Vienna 工作区 UI 与 TTPL/LLC 对齐（紧凑工具栏/框图/隐藏参数交互），
-              修复窄面板采样原理图裁剪问题
+            - Vienna 工作区 UI 与 TTPL/LLC 对齐（紧凑工具栏/框图/隐藏参数交互）
             - LLC 谐振腔、Q/ZVS、磁件、损耗、波形和数字控制设计
             - 单相 TTPL PFC 与三相 Vienna PFC 控制、Bode、波形和 PF/THD 分析
             - LLC、TTPL、Vienna 平台无关 C99/Float32 控制代码生成
