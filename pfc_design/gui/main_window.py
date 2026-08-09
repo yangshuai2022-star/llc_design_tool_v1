@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import traceback
 
-from PySide6.QtCore import QThreadPool, Signal
+from PySide6.QtCore import QThreadPool, QTimer, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMainWindow,QMessageBox,QProgressBar,QSizePolicy,QStatusBar,QTabWidget,QWidget
 
 from llc_design.gui.workers import FunctionWorker
+from llc_design.gui.updater import add_toolbar_right_side, check_for_updates
 from pfc_design.control import PFCControlLabConfig,build_pfc_control_lab_analysis,build_pfc_switching_waveforms,simulate_pfc_line_cycle
 from pfc_design.vienna import (
     ViennaControlLabConfig,
@@ -43,6 +44,11 @@ class PFCMainWindow(QMainWindow):
         spacer=QWidget();spacer.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Preferred);tb.addWidget(spacer)
         a=QAction("运行当前 PFC 分析",self);a.triggered.connect(self._run_current);tb.addAction(a)
         a=QAction("关于 PFC",self);a.triggered.connect(self.show_about);tb.addAction(a)
+        add_toolbar_right_side(tb,self)
+        QTimer.singleShot(2500,self._auto_check_update)
+
+    def _auto_check_update(self):
+        check_for_updates(self,notify_up_to_date=False)
 
     def _apply_pfc_style(self):
         # Match the proven LLC workspace styling so Windows 11, macOS and Linux

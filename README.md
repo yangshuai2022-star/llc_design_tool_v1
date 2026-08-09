@@ -273,6 +273,13 @@ One click applies the calculated full-load L and hot DCR back into the TTPL/Vien
 
 The Vienna workspace now uses the same compact toolbar/diagram/hidden-parameter interaction model as TTPL/LLC (oversized title row and oversized diagram removed). The shared LLC/PFC analog-sense schematic wraps responsively in narrow inspectors instead of being clipped.
 
+## V7.4 Update check and contact info
+
+The GUI toolbar (top-right, LLC and PFC workspaces) shows the author's contact info and an **检查更新** button. The button queries the GitHub Releases API in a background thread: when a newer release exists it shows the release notes with a link to the download page. A silent auto-check runs 2.5 s after startup and only prompts when an update is available.
+
+- 邮箱: maileyang@qq.com(点击可直接写信)
+- 微信: maileyang
+
 ## License
 
 MIT License — see [LICENSE](LICENSE).

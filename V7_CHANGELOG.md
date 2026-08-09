@@ -1,3 +1,13 @@
+# V7.4 — GitHub 更新检查与联系方式
+
+- 工具栏右上角新增"检查更新": 后台线程联网查询 GitHub Releases API,
+  有新版本时弹出版本说明、发布时间并提供"打开下载页"跳转。
+- 启动后 2.5s 自动静默检查一次, 仅在新版本时提示; 离线/网络失败自动检查静默,
+  手动检查会给出明确错误提示。
+- LLC 与 PFC 工作区工具栏右上角新增联系方式: 邮箱 maileyang@qq.com(可点击写信)
+  与微信号 maileyang。
+- 版本号统一为 7.3.0(pyproject.toml / llc_design.__version__ / 更新检查基准)。
+
 # V7.3 — PFC Inductor Design + Vienna UI Unification
 
 - Fixed the shared LLC/PFC analog-sense schematic clipping in narrow inspectors by making the widget height responsive and guaranteeing the wrapped 3+2 chain is fully visible.

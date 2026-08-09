@@ -6,7 +6,7 @@ from dataclasses import asdict
 from pathlib import Path
 import traceback
 
-from PySide6.QtCore import QThreadPool, Qt, Signal
+from PySide6.QtCore import QThreadPool, QTimer, Qt, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QComboBox,
@@ -53,6 +53,7 @@ from ..magnetics.transformer_designer import (FerriteCoreInput, TransformerSynth
                                                export_transformer_synthesis)
 from ..models.devices import DeviceDatabase
 from .workers import FunctionWorker
+from .updater import add_toolbar_right_side, check_for_updates
 
 from .widgets.small_signal_view import SmallSignalView
 from .widgets.digital_loop_view import DigitalLoopView
@@ -153,6 +154,13 @@ class LLCMainWindow(QMainWindow):
         about_action = QAction("关于", self)
         about_action.triggered.connect(self.show_about)
         toolbar.addAction(about_action)
+
+        add_toolbar_right_side(toolbar, self)
+        QTimer.singleShot(2500, self._auto_check_update)
+
+    def _auto_check_update(self) -> None:
+        """启动后静默检查一次更新,仅在新版本时提示。"""
+        check_for_updates(self, notify_up_to_date=False)
 
     def _build_ui(self) -> None:
         """Use dockable global inputs instead of a permanent nested sidebar."""
