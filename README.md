@@ -1,4 +1,4 @@
-# Power Design Toolkit V7
+# Power Design Toolkit V7.3
 
 Integrated engineering design and control-analysis toolkit for:
 
@@ -242,7 +242,38 @@ Every generated folder contains C99/float32 sources, a compile-ready ISR integra
 The TTPL PFC page now mirrors the LLC digital-control workspace: a compact interactive overview, collapsible parameter inspector, collapsible transfer-function selector and a larger default Bode/waveform area. The PFC main window also uses the same cross-platform Qt stylesheet as LLC so Windows 11 no longer falls back to inconsistent native-looking tabs/buttons/spin boxes.
 
 
-## V7.3 PFC magnetic design
+## V7.3 PFC inductor design
 
-TTPL and Vienna workspaces include an **Inductor Design** page based on Magnetics High Flux powder-core manufacturer fits.  The built-in default is Core Data 254 / 60 µ, with editable geometry and AL, enamelled round copper sizing, DC-bias L(I) droop, line-cycle core loss, hot DCR/copper loss, and apply-back to the power-stage L/R parameters.
+TTPL and Vienna workspaces include a dedicated **Inductor Design** page.
+
+### Default core
+
+Built-in default is the Magnetics **High Flux** powder-core **Core Data 254** (60 µ grade, AL = 81 nH/T²), with editable geometry/AL:
+
+- Le = 98.4 mm, Ae = 110.6 mm², Ve = 10880 mm³
+- OD = 40.77 mm, ID = 23.32 mm, HT = 15.37 mm
+
+Only permeability grades with both a Core Data 254 AL value and complete published DC-bias/core-loss coefficients are selectable in the automatic model.
+
+### Manufacturer fits
+
+- DC-bias permeability droop: `%ui = 1 / (a + b·H^c)`, H in Oe.
+- Core-loss density: `Pv = a·B^b·f^c`, B in T, f in kHz, Pv in mW/cm³.
+- Full-load L(I) droop curve and line-cycle switching-ripple/core-loss calculation.
+
+### Copper model
+
+Default winding is enamelled round copper; the page sizes the wire from current density, computes hot DCR and DC I²R copper loss, and reports the full-load operating point. Skin/proximity losses are intentionally excluded in V7.3 per the design requirement.
+
+### Apply back
+
+One click applies the calculated full-load L and hot DCR back into the TTPL/Vienna power-stage parameters.
+
+### V7.3 Vienna UI unification
+
+The Vienna workspace now uses the same compact toolbar/diagram/hidden-parameter interaction model as TTPL/LLC (oversized title row and oversized diagram removed). The shared LLC/PFC analog-sense schematic wraps responsively in narrow inspectors instead of being clipped.
+
+## License
+
+MIT License — see [LICENSE](LICENSE).
 

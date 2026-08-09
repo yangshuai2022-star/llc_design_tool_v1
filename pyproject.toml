@@ -2,6 +2,7 @@
 name = "power-design-toolkit"
 version = "0.11.0"
 description = "Integrated LLC, single-phase TTPL PFC and three-phase Vienna PFC engineering design laboratory"
+license = {text = "MIT"}
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24",
