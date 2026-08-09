@@ -1,0 +1,238 @@
+{
+  "topology": "single_phase_ttpl_pfc",
+  "numeric_format": "C99 float32",
+  "bsp_generated": false,
+  "duty_feedforward_enabled": true,
+  "config": {
+    "power_stage": {
+      "vin_rms_v": 230.0,
+      "line_frequency_hz": 50.0,
+      "bus_voltage_v": 400.0,
+      "output_power_w": 3300.0,
+      "switching_frequency_hz": 50000.0,
+      "boost_inductance_h": 0.00022,
+      "equivalent_series_resistance_ohm": 0.055,
+      "bus_capacitance_f": 0.00132,
+      "bus_cap_esr_ohm": 0.035,
+      "efficiency": 0.97,
+      "load_model": "constant_power",
+      "line_angle_deg": 60.0,
+      "duty_min": 0.01,
+      "duty_max": 0.98,
+      "minimum_effective_pulse_s": 0.0,
+      "deadtime_s": 1e-07
+    },
+    "firmware": {
+      "current_loop_rate_hz": 50000.0,
+      "amc_rate_hz": 25000.0,
+      "voltage_loop_rate_hz": 10000.0,
+      "vac_rms_lpf_alpha": 0.006283,
+      "vac_rms_feedforward_gain": 0.01,
+      "gcmd_max_a_per_v": 0.18,
+      "indu_comp_gain": 0.085,
+      "indu_comp_min": 0.7,
+      "indu_comp_max": 1.0,
+      "vff_bypass": false,
+      "current_computation_delay_s": 1e-06,
+      "current_pwm_update_delay_s": 1e-05,
+      "amc_update_delay_s": 2e-05,
+      "voltage_computation_delay_s": 4e-06
+    },
+    "current_controller": {
+      "kp": 0.008540594774311891,
+      "ti_s": 0.0006460802362988104,
+      "sample_time_s": 2e-05,
+      "output_min": -2.0,
+      "output_max": 0.98
+    },
+    "voltage_controller": {
+      "kp": 0.1,
+      "ti_s": 0.002,
+      "sample_time_s": 0.0001,
+      "output_min": -1.0,
+      "output_max": 40.0
+    },
+    "current_sense": {
+      "name": "PFC inductor current",
+      "front_end_gain_v_per_unit": 0.03,
+      "amplifier_gain": 1.0,
+      "amplifier_bandwidth_hz": 2000000.0,
+      "source_resistance_ohm": 0.0,
+      "shunt_capacitance_f": 0.0,
+      "output_resistance_ohm": 220.0,
+      "adc_capacitance_f": 2e-09,
+      "second_resistance_ohm": 0.0,
+      "second_capacitance_f": 0.0,
+      "normalize_to_engineering_units": true,
+      "adc_vref_v": 3.3,
+      "adc_bits": 12,
+      "timing": {
+        "sample_rate_hz": 50000.0,
+        "adc_clock_hz": 60000000.0,
+        "acquisition_time_s": 3e-07,
+        "conversion_cycles": 13.0,
+        "soc_count": 1,
+        "soc_spacing_s": 0.0,
+        "recursive_previous_weight": 0.0,
+        "computation_delay_s": 0.0,
+        "pwm_update_delay_s": 0.0,
+        "include_zero_order_hold": true,
+        "digital_filter": {
+          "alpha": 1.0
+        }
+      }
+    },
+    "vac_sense": {
+      "name": "AC input voltage",
+      "front_end_gain_v_per_unit": 0.006666666666666667,
+      "amplifier_gain": 1.0,
+      "amplifier_bandwidth_hz": 1000000.0,
+      "source_resistance_ohm": 2000.0,
+      "shunt_capacitance_f": 1e-09,
+      "output_resistance_ohm": 220.0,
+      "adc_capacitance_f": 2e-09,
+      "second_resistance_ohm": 0.0,
+      "second_capacitance_f": 0.0,
+      "normalize_to_engineering_units": true,
+      "adc_vref_v": 3.3,
+      "adc_bits": 12,
+      "timing": {
+        "sample_rate_hz": 50000.0,
+        "adc_clock_hz": 60000000.0,
+        "acquisition_time_s": 3e-07,
+        "conversion_cycles": 13.0,
+        "soc_count": 1,
+        "soc_spacing_s": 0.0,
+        "recursive_previous_weight": 0.0,
+        "computation_delay_s": 0.0,
+        "pwm_update_delay_s": 0.0,
+        "include_zero_order_hold": true,
+        "digital_filter": {
+          "alpha": 1.0
+        }
+      }
+    },
+    "vbus_sense": {
+      "name": "PFC bus voltage",
+      "front_end_gain_v_per_unit": 0.013490725126475547,
+      "amplifier_gain": 1.0,
+      "amplifier_bandwidth_hz": 1000000.0,
+      "source_resistance_ohm": 1578.4148397976392,
+      "shunt_capacitance_f": 1e-09,
+      "output_resistance_ohm": 220.0,
+      "adc_capacitance_f": 2e-09,
+      "second_resistance_ohm": 0.0,
+      "second_capacitance_f": 0.0,
+      "normalize_to_engineering_units": true,
+      "adc_vref_v": 3.3,
+      "adc_bits": 12,
+      "timing": {
+        "sample_rate_hz": 10000.0,
+        "adc_clock_hz": 60000000.0,
+        "acquisition_time_s": 3e-07,
+        "conversion_cycles": 13.0,
+        "soc_count": 1,
+        "soc_spacing_s": 0.0,
+        "recursive_previous_weight": 0.0,
+        "computation_delay_s": 0.0,
+        "pwm_update_delay_s": 0.0,
+        "include_zero_order_hold": true,
+        "digital_filter": {
+          "alpha": 1.0
+        }
+      }
+    },
+    "frequency_start_hz": 0.5,
+    "frequency_stop_hz": 20000.0,
+    "frequency_points": 1600,
+    "waveform_line_cycles": 8,
+    "switching_cycles": 2,
+    "switching_samples_per_cycle": 800,
+    "waveform_integration_rate_hz": 500000.0
+  },
+  "analysis": {
+    "operating_point": {
+      "vin_instantaneous_abs_v": 281.6913204200655,
+      "line_angle_deg": 60.0,
+      "current_reference_a": 18.115903521256136,
+      "ideal_duty": 0.29577169894983624,
+      "indu_comp": 1.0,
+      "input_conductance_a_per_v": 0.06431118819792256,
+      "input_current_rms_a": 14.791573285522187
+    },
+    "current_loop": {
+      "controller": "PI(z)",
+      "crossover_hz": 2463.39292797684,
+      "phase_margin_deg": 56.98274080447496,
+      "gain_margin_db": 10.577968195811193,
+      "stable": false
+    },
+    "voltage_loop": {
+      "controller": "PI(z)",
+      "crossover_hz": 15.637778369919284,
+      "phase_margin_deg": 10.835808577149976,
+      "gain_margin_db": 55.91156874257928,
+      "stable": false
+    },
+    "sensing": {
+      "current": {
+        "name": "PFC inductor current",
+        "raw_dc_gain": 0.03,
+        "adc_codes_per_unit": 37.236363636363635,
+        "amplifier_pole_hz": 2000000.0,
+        "source_rc_pole_hz": Infinity,
+        "output_rc_pole_hz": 361715.7797543076,
+        "second_rc_pole_hz": Infinity,
+        "nominal_latency_s": 3.6666666666666667e-07,
+        "gain_50hz_db": -1.4376632596992744e-05,
+        "phase_50hz_deg": -0.1959523944370847,
+        "gain_60hz_db": -2.0702353918368143e-05,
+        "phase_60hz_deg": -0.2351428732977096,
+        "gain_100hz_db": -5.7506586778207716e-05,
+        "gain_120hz_db": -8.280953260924048e-05,
+        "gain_switching_db": -328.27090909416177
+      },
+      "vac": {
+        "name": "AC input voltage",
+        "raw_dc_gain": 0.006666666666666667,
+        "adc_codes_per_unit": 8.274747474747475,
+        "amplifier_pole_hz": 1000000.0,
+        "source_rc_pole_hz": 79577.47154594767,
+        "output_rc_pole_hz": 361715.7797543076,
+        "second_rc_pole_hz": Infinity,
+        "nominal_latency_s": 3.6666666666666667e-07,
+        "gain_50hz_db": -1.6099301168667292e-05,
+        "phase_50hz_deg": -0.2333847841854139,
+        "gain_60hz_db": -2.31829964512567e-05,
+        "phase_60hz_deg": -0.2800617384932506,
+        "gain_100hz_db": -6.439725701479211e-05,
+        "gain_120hz_db": -9.273209432016602e-05,
+        "gain_switching_db": -329.7241095306555
+      },
+      "vbus": {
+        "name": "PFC bus voltage",
+        "raw_dc_gain": 0.013490725126475547,
+        "adc_codes_per_unit": 16.744851550922377,
+        "amplifier_pole_hz": 1000000.0,
+        "source_rc_pole_hz": 100832.13809133969,
+        "output_rc_pole_hz": 361715.7797543076,
+        "second_rc_pole_hz": Infinity,
+        "nominal_latency_s": 3.6666666666666667e-07,
+        "gain_50hz_db": -0.00035836077664909877,
+        "phase_50hz_deg": -0.9457962537104757,
+        "gain_60hz_db": -0.0005160413797496025,
+        "phase_60hz_deg": -1.1349555031951202,
+        "gain_100hz_db": -0.001433478361293919,
+        "gain_120hz_db": -0.0020642386256584937,
+        "gain_switching_db": -329.23383876169845
+      }
+    },
+    "warnings": [
+      "Voltage-loop phase margin is below 35 degrees."
+    ]
+  },
+  "controller_kinds": {
+    "current": "pi",
+    "voltage": "pi"
+  }
+}

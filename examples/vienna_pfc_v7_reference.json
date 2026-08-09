@@ -1,0 +1,17 @@
+{
+  "topology": "three_phase_vienna_pfc",
+  "nominal": {
+    "line_line_rms_v": 400,
+    "bus_voltage_v": 700,
+    "output_power_w": 10000,
+    "switching_frequency_hz": 65000
+  },
+  "control": {
+    "current_frame": "ABC stationary frame",
+    "main_loops": ["dc_voltage_outer", "three_phase_current_inner"],
+    "auxiliary": "split_bus_midpoint_balance",
+    "third_harmonic_injection": true,
+    "inductor_voltage_drop_feedforward": true,
+    "default_bode": "open_loop_only"
+  }
+}

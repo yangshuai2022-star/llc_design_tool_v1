@@ -1,0 +1,10 @@
+CODE GENERATION VALIDATION
+
+Overall: PASS
+
+Checks:
+- nominal phase margin = 93.18526120727567 deg (PASS)
+- all-discrete closed-loop poles stable = True (PASS)
+
+Warnings:
+- Linear Bode validity requires voltage-loop ownership: no current-limit min-selector takeover, burst, soft-start, saturation, OVP/UVP/OPP or hardware trip.

@@ -1,0 +1,17 @@
+LLC Design Tool V4.2 - Bode cursor Chinese font fix
+
+Root cause
+----------
+The draggable Bode cursor annotations explicitly forced Matplotlib's generic
+"monospace" family.  On Windows this normally resolves to a font without CJK
+glyphs, so Chinese trace names were rendered as square replacement characters.
+The Qt status panel and plot legends were unaffected because they used the
+application/default CJK-capable fonts.
+
+Fix
+---
+- Removed the forced generic monospace font from both cursor annotations.
+- Added an installed-font resolver with Windows, macOS and Linux CJK families.
+- The resolver binds the annotation directly to the discovered native font file.
+- No font files are bundled or distributed.
+- Added a rendering regression test using a Chinese trace label.
