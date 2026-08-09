@@ -133,6 +133,7 @@ def _current_loop_at_indu_comp(
     return ({
         "plant_gid": plant,
         "controller_ci": control,
+        "indu_comp_gain": np.full_like(frequencies_hz, complex(indu_comp, 0.0), dtype=complex),
         "pwm_zoh": pwm,
         "sense_hi": current_sense.total,
         "sense_hi_analog": current_sense.calibrated_analog,

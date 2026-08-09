@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFontDatabase
 from PySide6.QtWidgets import (
     QComboBox,
+    QDialog,
     QDoubleSpinBox,
+    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -34,6 +37,9 @@ from llc_design.control.digital_loop import (
     PIFControllerConfig,
     TwoP2ZControllerConfig,
 )
+from llc_design.gui.widgets.control_block_diagram import BlockSpec, ConnectionSpec, ControlBlockDiagram
+from llc_design.gui.widgets.sense_schematic import AnalogSenseSchematic
+from llc_design.control.phase_budget import phase_budget
 from llc_design.gui.widgets.bode_cursor import (
     BodeCursorMeasurement,
     format_frequency,
@@ -48,11 +54,14 @@ from pfc_design.control import (
     PFCControlLabConfig,
     PFCFirmwareAlgorithmConfig,
     PFCLineCycleWaveforms,
+    tune_pfc_current_loop,
     PFCPowerStageConfig,
     PFCSwitchingWaveforms,
 )
+from pfc_design.control.waveforms import PFC_PWM_STATE_NAMES
 
 from .bode_panel import PFCBodeCurve, SelectableBodePanel
+from power_codegen import generate_ttpl_control_code
 
 
 class PFCControlLabView(QWidget):
@@ -79,7 +88,83 @@ class PFCControlLabView(QWidget):
         self.run_button = QPushButton("运行 PFC 完整分析")
         self.run_button.clicked.connect(self._request)
         header.addWidget(self.run_button)
+        self.codegen_button = QPushButton("生成 C99 控制代码")
+        self.codegen_button.setToolTip("基于当前已验证环路生成平台无关 C99/float32 ControlStep + ISR 模板；不生成 BSP")
+        self.codegen_button.clicked.connect(self._generate_c99)
+        header.addWidget(self.codegen_button)
         root.addLayout(header)
+
+        diagram_bar = QHBoxLayout()
+        diagram_title = QLabel("TTPL PFC 双环控制信号链")
+        diagram_title.setStyleSheet("font-size:15px;font-weight:600;color:#344054;")
+        diagram_bar.addWidget(diagram_title)
+        diagram_hint = QLabel("点击模块联动参数/Bode · 滚轮缩放 · 拖动平移 · 双击空白适应窗口")
+        diagram_hint.setStyleSheet("color:#667085;")
+        diagram_bar.addWidget(diagram_hint)
+        diagram_bar.addStretch(1)
+        self.fit_diagram_button = QPushButton("适应")
+        self.actual_diagram_button = QPushButton("100%")
+        self.zoom_out_button = QPushButton("−"); self.zoom_out_button.setFixedWidth(34)
+        self.zoom_in_button = QPushButton("＋"); self.zoom_in_button.setFixedWidth(34)
+        self.fullscreen_diagram_button = QPushButton("全屏框图")
+        for button in (self.fit_diagram_button, self.actual_diagram_button, self.zoom_out_button, self.zoom_in_button, self.fullscreen_diagram_button):
+            diagram_bar.addWidget(button)
+        root.addLayout(diagram_bar)
+
+        # Two clearly separated rows: slow voltage path above, fast current path
+        # below.  Feed-forward and sensing are placed underneath their summing
+        # points so every connection is orthogonal and the two feedback returns
+        # do not cut through the main signal path.
+        self._diagram_blocks = [
+            BlockSpec("vsum", "Σ Vbus", "Vref − Vbus", 20, 18, 105, 62),
+            BlockSpec("voltage_controller", "Voltage PI / PIF / 2P2Z", "Cv(z) · 10 kHz", 155, 18, 190, 62, "controller"),
+            BlockSpec("vff", "Vrms² Feedforward", "V-loop normalization", 375, 18, 175, 62, "modulator"),
+            BlockSpec("amc", "AMC / Gcmd", "conductance · 25 kHz", 580, 18, 160, 62, "modulator"),
+            BlockSpec("iref", "Iref Generator", "Gcmd × |Vac|", 770, 18, 165, 62, "modulator"),
+
+            BlockSpec("isum", "Σ Current", "Iref − |iL|", 770, 118, 130, 62),
+            BlockSpec("current_controller", "Current PI / PIF / 2P2Z", "Ci(z) · 50 kHz", 930, 118, 200, 62, "controller"),
+            BlockSpec("indu_comp", "Current Gain", "Kindu = 0.7 … 1", 1160, 118, 160, 62, "modulator"),
+            BlockSpec("duty", "Σ Duty", "Dff + ΔD", 1350, 118, 125, 62),
+            BlockSpec("pwm", "PWM / Min Pulse", "ZOH + update delay", 1505, 118, 175, 62, "modulator"),
+            BlockSpec("plant", "TTPL Boost Plant", "Gid(s) / bus energy", 1710, 118, 185, 62, "plant"),
+
+            BlockSpec("vac_sense", "Vac Sense / ADC", "Iref / DFF / Vrms", 545, 225, 175, 62, "sense"),
+            BlockSpec("duty_ff", "Duty Feedforward", "1 − |Vac| / Vbus_set", 1340, 225, 195, 62, "modulator"),
+            BlockSpec("current_sense", "iL Sense / ADC", "Sensor + RC + ADC", 1695, 225, 190, 62, "sense"),
+            BlockSpec("vbus_sense", "Vbus Sense / ADC", "Divider + RC + ADC", 1695, 325, 190, 62, "sense"),
+        ]
+        self._diagram_connections = [
+            ConnectionSpec("vsum", "voltage_controller"),
+            ConnectionSpec("voltage_controller", "vff"),
+            ConnectionSpec("vff", "amc"),
+            ConnectionSpec("amc", "iref", "Gcmd"),
+            ConnectionSpec("iref", "isum", "Iref"),
+            ConnectionSpec("isum", "current_controller", "ei"),
+            ConnectionSpec("current_controller", "indu_comp", "Duty PI"),
+            ConnectionSpec("indu_comp", "duty", "ΔD"),
+            ConnectionSpec("duty_ff", "duty", "Dff"),
+            ConnectionSpec("duty", "pwm"),
+            ConnectionSpec("pwm", "plant"),
+            ConnectionSpec("plant", "current_sense", "iL"),
+            ConnectionSpec("current_sense", "isum", "iL meas", feedback=True),
+            ConnectionSpec("plant", "vbus_sense", "Vbus"),
+            ConnectionSpec("vbus_sense", "vsum", "Vbus meas", feedback=True),
+            ConnectionSpec("vac_sense", "iref", "|Vac|"),
+            ConnectionSpec("vac_sense", "duty_ff", "|Vac|"),
+            ConnectionSpec("vac_sense", "vff", "Vrms"),
+        ]
+        self.diagram = ControlBlockDiagram()
+        self.diagram.setMinimumHeight(220)
+        self.diagram.setMaximumHeight(285)
+        self.diagram.set_diagram(self._diagram_blocks, self._diagram_connections)
+        self.diagram.block_selected.connect(self._diagram_selected)
+        root.addWidget(self.diagram)
+        self.fit_diagram_button.clicked.connect(self.diagram.fit_to_view)
+        self.actual_diagram_button.clicked.connect(self.diagram.actual_size)
+        self.zoom_out_button.clicked.connect(self.diagram.zoom_out)
+        self.zoom_in_button.clicked.connect(self.diagram.zoom_in)
+        self.fullscreen_diagram_button.clicked.connect(self._open_diagram_fullscreen)
 
         splitter = QSplitter()
         splitter.addWidget(self._build_input_panel())
@@ -87,6 +172,30 @@ class PFCControlLabView(QWidget):
         splitter.setSizes([400, 1180])
         splitter.setStretchFactor(1, 1)
         root.addWidget(splitter, 1)
+
+    def _open_diagram_fullscreen(self) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle("TTPL PFC 双环控制信号链 — 全屏")
+        dialog.setModal(True)
+        layout = QVBoxLayout(dialog)
+        bar = QHBoxLayout()
+        title = QLabel("TTPL PFC：电压外环 + 电流内环 + Duty Feedforward")
+        title.setStyleSheet("font-size:18px;font-weight:700;color:#101828;")
+        bar.addWidget(title); bar.addStretch(1)
+        big = ControlBlockDiagram(dialog)
+        buttons = []
+        for text, slot in (("适应窗口", big.fit_to_view), ("100%", big.actual_size), ("−", big.zoom_out), ("＋", big.zoom_in)):
+            b = QPushButton(text); b.clicked.connect(slot); bar.addWidget(b); buttons.append(b)
+        close = QPushButton("关闭"); close.clicked.connect(dialog.accept); bar.addWidget(close)
+        layout.addLayout(bar)
+        big.set_diagram(list(self._diagram_blocks), list(self._diagram_connections))
+        if self.diagram.selected_key and big.has_block(self.diagram.selected_key):
+            big.select_block(self.diagram.selected_key)
+        big.block_selected.connect(lambda key: (self.diagram.select_block(key, emit=False), self._diagram_selected(key)))
+        layout.addWidget(big, 1)
+        dialog.resize(1600, 900)
+        dialog.setWindowState(dialog.windowState() | Qt.WindowState.WindowMaximized)
+        dialog.exec()
 
     @staticmethod
     def _spin(minimum, maximum, decimals, value, suffix="") -> QDoubleSpinBox:
@@ -146,6 +255,7 @@ class PFCControlLabView(QWidget):
         self.duty_min = self._spin(0, 0.9, 5, 0.01)
         self.duty_max = self._spin(0.01, 1.0, 5, 0.98)
         self.min_pulse_us = self._spin(0, 100, 4, 0, " µs")
+        self.deadtime_ns = self._spin(0, 5000, 2, 100, " ns")
         self.switch_cycles = self._integer_spin(1, 20, 2)
         self.switch_samples = self._integer_spin(100, 5000, 800)
         self.load_model = QComboBox()
@@ -165,6 +275,7 @@ class PFCControlLabView(QWidget):
             ("Duty 最小", self.duty_min),
             ("Duty 最大", self.duty_max),
             ("最小有效脉宽", self.min_pulse_us),
+            ("高频桥臂死区", self.deadtime_ns),
             ("局部开关周期数", self.switch_cycles),
             ("每开关周期采样点", self.switch_samples),
             ("后级负载", self.load_model),
@@ -190,8 +301,13 @@ class PFCControlLabView(QWidget):
         kind.addItem("PI", ControllerKind.PI)
         kind.addItem("PIF（PI + 输出 LPF）", ControllerKind.PIF)
         kind.addItem("2P2Z", ControllerKind.TWO_P_TWO_Z)
-        kp = self._spin(0, 1000, 8, 0.1 if voltage else 0.01)
-        ti = self._spin(0.001, 10000, 5, 2.0 if voltage else 0.075, " ms")
+        # The current-loop GUI starts from the conservative V7.1.5 design
+        # baseline instead of the low-margin legacy firmware values.  The
+        # original firmware pair remains available through the restore button
+        # below, and the one-click tuner recomputes a recommendation whenever
+        # L/R/sensing/delay settings change.
+        kp = self._spin(0, 1000, 8, 0.1 if voltage else 0.00854059)
+        ti = self._spin(0.001, 10000, 5, 2.0 if voltage else 0.64608, " ms")
         fc = self._spin(0.1, 100000, 2, 1000 if voltage else 5000, " Hz")
         b0 = self._spin(-1e6, 1e6, 9, 0)
         b1 = self._spin(-1e6, 1e6, 9, 0)
@@ -229,6 +345,26 @@ class PFCControlLabView(QWidget):
         voltage_group, self.voltage_ctrl = self._controller_group(
             "母线电压外环（10 kHz）", voltage=True)
         layout.addWidget(current_group)
+
+        tune_group = QGroupBox("电流环稳定设计起点")
+        tune_layout = QVBoxLayout(tune_group)
+        tune_buttons = QHBoxLayout()
+        self.autotune_current_button = QPushButton("一键稳定整定并应用")
+        self.autotune_current_button.setToolTip("按当前 Boost L/R、采样链、50 kHz 数字延迟与 indu_comp 包络自动设计 PI")
+        self.restore_firmware_current_button = QPushButton("恢复固件原始 PI")
+        self.restore_firmware_current_button.setToolTip("恢复 Kp=0.01, Ti=0.075 ms；该组参数保留用于对照，不代表当前模型下有足够相位裕量")
+        tune_buttons.addWidget(self.autotune_current_button)
+        tune_buttons.addWidget(self.restore_firmware_current_button)
+        tune_layout.addLayout(tune_buttons)
+        self.autotune_status = QLabel(
+            "默认使用稳定设计基线。修改 L/R、采样滤波或延迟后，建议重新执行一键整定。"
+        )
+        self.autotune_status.setWordWrap(True)
+        self.autotune_status.setStyleSheet("padding:6px;border:1px solid #b2ddff;background:#eff8ff;color:#175cd3;")
+        tune_layout.addWidget(self.autotune_status)
+        self.autotune_current_button.clicked.connect(self._auto_tune_current_loop)
+        self.restore_firmware_current_button.clicked.connect(self._restore_firmware_current_pi)
+        layout.addWidget(tune_group)
         layout.addWidget(voltage_group)
 
         fw_group = QGroupBox("AMC / 前馈 / 调度")
@@ -252,10 +388,19 @@ class PFCControlLabView(QWidget):
         layout.addStretch(1)
         return page
 
-    def _sense_group(self, title: str, defaults: tuple[float, ...]):
+    def _sense_group(self, title: str, defaults: tuple[float, ...], *, source_label: str, front_label: str):
         gain, bw_khz, source_r, source_c_nf, out_r, out_c_nf, sample_khz = defaults
         group = QGroupBox(title)
         form = QFormLayout(group)
+        schematic = AnalogSenseSchematic(title=f"{title}：硬件与数字采样链")
+        schematic.set_labels(
+            source=source_label,
+            front=front_label,
+            amp="Buffer / OpAmp\nGain + GBW",
+            rc="External RC\nRout / Cadc",
+            adc="ADC S/H\nFilter / Scale",
+        )
+        form.addRow(schematic)
         widgets = {
             "gain": self._spin(1e-9, 1000, 9, gain, " V/unit"),
             "bw": self._spin(0.1, 100000, 2, bw_khz, " kHz"),
@@ -279,13 +424,16 @@ class PFCControlLabView(QWidget):
         page = QWidget()
         layout = QVBoxLayout(page)
         current, self.current_sense = self._sense_group(
-            "电感电流采样", (0.03, 2000, 0, 0, 220, 2, 50))
+            "电感电流采样", (0.03, 2000, 0, 0, 220, 2, 50),
+            source_label="iL", front_label="Current Sensor\nShunt / Hall")
         vac, self.vac_sense = self._sense_group(
-            "AC 电压采样", (1 / 150, 1000, 2000, 1, 220, 2, 50))
+            "AC 电压采样", (1 / 150, 1000, 2000, 1, 220, 2, 50),
+            source_label="Vac", front_label="HV Divider\nRup / Rlow / C")
         vbus_gain = 1600 / (117000 + 1600)
         vbus_r = 117000 * 1600 / (117000 + 1600)
         vbus, self.vbus_sense = self._sense_group(
-            "母线电压采样", (vbus_gain, 1000, vbus_r, 1, 220, 2, 10))
+            "母线电压采样", (vbus_gain, 1000, vbus_r, 1, 220, 2, 10),
+            source_label="Vbus", front_label="117k / 1.6k\n+ 1 nF")
         for group in (current, vac, vbus):
             layout.addWidget(group)
         layout.addStretch(1)
@@ -302,6 +450,10 @@ class PFCControlLabView(QWidget):
             "QLabel {padding:5px;border:1px solid #aaa;background:#f7f7f7;}"
         )
         layout.addWidget(self.cursor_status)
+        self.phase_budget_label = QLabel("Phase budget：点击控制框图环节或拖动 Bode 光标查看该频点的幅相贡献。")
+        self.phase_budget_label.setWordWrap(True)
+        self.phase_budget_label.setStyleSheet("QLabel {padding:5px;border:1px solid #cfd4dc;background:#fbfcfe;}")
+        layout.addWidget(self.phase_budget_label)
 
         self.tabs = QTabWidget()
         self.current_bode = SelectableBodePanel("PFC 电感电流内环")
@@ -319,6 +471,10 @@ class PFCControlLabView(QWidget):
             "AC 控制细节")
         self.switch_figure, self.switch_canvas = self._waveform_tab(
             "局部开关周期")
+        self.zero_figure, self.zero_canvas = self._waveform_tab(
+            "Zero Crossing Analyzer")
+        self.harmonic_figure, self.harmonic_canvas = self._waveform_tab(
+            "PF / THD / Harmonics")
 
         self.summary = QPlainTextEdit()
         self.summary.setReadOnly(True)
@@ -341,8 +497,97 @@ class PFCControlLabView(QWidget):
         self.tabs.addTab(page, title)
         return figure, canvas
 
+    def _diagram_selected(self, key: str) -> None:
+        # Parameter panel and Bode trace use the same semantic key.
+        if key in {"voltage_controller", "current_controller", "vff", "amc", "iref", "duty_ff", "indu_comp", "duty"}:
+            self.input_tabs.setCurrentIndex(1)
+        elif key in {"current_sense", "vac_sense", "vbus_sense"}:
+            self.input_tabs.setCurrentIndex(2)
+        else:
+            self.input_tabs.setCurrentIndex(0)
+
+        if key == "current_controller":
+            self.tabs.setCurrentWidget(self.current_bode); self.current_bode.focus_curve("controller_ci")
+        elif key == "current_sense":
+            self.tabs.setCurrentWidget(self.current_bode); self.current_bode.focus_curve("sense_hi")
+        elif key == "indu_comp":
+            self.tabs.setCurrentWidget(self.current_bode); self.current_bode.focus_curve("indu_comp_gain")
+        elif key == "pwm":
+            self.tabs.setCurrentWidget(self.current_bode); self.current_bode.focus_curve("pwm_zoh")
+        elif key == "plant":
+            self.tabs.setCurrentWidget(self.current_bode); self.current_bode.focus_curve("plant_gid")
+        elif key == "voltage_controller":
+            self.tabs.setCurrentWidget(self.voltage_bode); self.voltage_bode.focus_curve("controller_cv")
+        elif key in {"vff", "amc", "iref"}:
+            self.tabs.setCurrentWidget(self.voltage_bode); self.voltage_bode.focus_curve("amc_vff")
+        elif key == "duty_ff":
+            # Duty feed-forward is an additive disturbance-decoupling path, not
+            # part of the return ratio. Keep the stability view on Li rather
+            # than falsely presenting it as a loop-gain transfer function.
+            self.tabs.setCurrentWidget(self.current_bode); self.current_bode.show_open_loop_only()
+        elif key == "vbus_sense":
+            self.tabs.setCurrentWidget(self.voltage_bode); self.voltage_bode.focus_curve("sense_hv")
+        elif key == "vac_sense":
+            self.tabs.setCurrentWidget(self.sense_bode); self.sense_bode.focus_curve("vac_total", keep_open_loop=False)
+
+    def _restore_firmware_current_pi(self) -> None:
+        index = self.current_ctrl["kind"].findData(ControllerKind.PI)
+        if index >= 0:
+            self.current_ctrl["kind"].setCurrentIndex(index)
+        self.current_ctrl["kp"].setValue(0.01)
+        self.current_ctrl["ti"].setValue(0.075)
+        self.autotune_status.setText(
+            "已恢复固件原始 PI：Kp=0.01, Ti=0.075 ms。该值用于固件对照；请运行 Bode 检查当前硬件/延迟下的实际裕量。"
+        )
+        self.autotune_status.setStyleSheet("padding:6px;border:1px solid #fec84b;background:#fffaeb;color:#b54708;")
+
+    def _auto_tune_current_loop(self) -> None:
+        try:
+            config = self._config()
+            tuned = tune_pfc_current_loop(config)
+            index = self.current_ctrl["kind"].findData(ControllerKind.PI)
+            if index >= 0:
+                self.current_ctrl["kind"].setCurrentIndex(index)
+            self.current_ctrl["kp"].setValue(tuned.controller.kp)
+            self.current_ctrl["ti"].setValue(tuned.controller.ti_s * 1e3)
+            worst = tuned.worst_point
+            worst_text = ""
+            if worst is not None:
+                worst_text = (
+                    f"；最差点≈{worst.vin_rms_v:.1f} Vrms / {100*worst.load_ratio:.0f}% load / "
+                    f"{worst.line_angle_deg:.0f}° / Kindu={worst.indu_comp:.3f}"
+                )
+            self.autotune_status.setText(
+                f"{tuned.message}  Kp={tuned.controller.kp:.7g}, "
+                f"Ti={tuned.controller.ti_s*1e3:.5g} ms；"
+                f"fc≈{(tuned.nominal_crossover_hz or 0):.1f} Hz，"
+                f"PM≈{(tuned.nominal_phase_margin_deg or 0):.1f}°，"
+                f"最差 PM≈{(tuned.worst_phase_margin_deg or 0):.1f}°{worst_text}"
+            )
+            style = (
+                "padding:6px;border:1px solid #75e0a7;background:#ecfdf3;color:#067647;"
+                if tuned.accepted else
+                "padding:6px;border:1px solid #fec84b;background:#fffaeb;color:#b54708;"
+            )
+            self.autotune_status.setStyleSheet(style)
+            # One-click means both apply and immediately run the full analysis,
+            # so the user sees the new Bode/waveforms without a second action.
+            self._request()
+        except Exception as exc:
+            self.autotune_status.setText(f"自动整定失败：{exc}")
+            self.autotune_status.setStyleSheet("padding:6px;border:1px solid #fda29b;background:#fef3f2;color:#b42318;")
+
     def set_busy(self, busy: bool) -> None:
         self.run_button.setEnabled(not busy)
+        # Freeze inputs while the worker is using a snapshot of them.  Without
+        # this, changing line frequency/plant values mid-run can make the GUI
+        # render a result using a different parameter set than the solver used.
+        if hasattr(self, "input_tabs"):
+            self.input_tabs.setEnabled(not busy)
+        if hasattr(self, "autotune_current_button"):
+            self.autotune_current_button.setEnabled(not busy)
+        if hasattr(self, "codegen_button"):
+            self.codegen_button.setEnabled(not busy)
 
     def _controller(self, fields, sample_rate, output_min, output_max):
         kind = fields["kind"].currentData()
@@ -366,6 +611,10 @@ class PFCControlLabView(QWidget):
             adc_clock_hz=60e6,
             acquisition_time_s=300e-9,
             conversion_cycles=13,
+            # Do not double-count computation/PWM delay inside the sensor.
+            # The firmware/PWM model below owns those delays explicitly.
+            computation_delay_s=0.0,
+            pwm_update_delay_s=0.0,
             digital_filter=DigitalFilterConfig(fields["alpha"].value()),
         )
         return ExternalSenseConfig(
@@ -397,6 +646,7 @@ class PFCControlLabView(QWidget):
             duty_min=self.duty_min.value(),
             duty_max=self.duty_max.value(),
             minimum_effective_pulse_s=self.min_pulse_us.value() * 1e-6,
+            deadtime_s=self.deadtime_ns.value() * 1e-9,
         )
         fw = PFCFirmwareAlgorithmConfig(
             vac_rms_feedforward_gain=self.vff_gain.value(),
@@ -427,6 +677,24 @@ class PFCControlLabView(QWidget):
             switching_samples_per_cycle=self.switch_samples.value(),
         )
 
+    def _generate_c99(self) -> None:
+        if self.result is None:
+            QMessageBox.information(self, "C99 代码生成", "请先运行 PFC 完整分析；建议先执行一键稳定整定。")
+            return
+        directory = QFileDialog.getExistingDirectory(self, "选择 TTPL C99 输出目录")
+        if not directory:
+            return
+        try:
+            analysis = self.result[0]
+            result = generate_ttpl_control_code(analysis, Path(directory) / "ttpl_control_generated")
+        except Exception as exc:
+            QMessageBox.warning(self, "C99 代码生成失败", str(exc))
+            return
+        QMessageBox.information(
+            self, "C99 代码生成完成",
+            f"已生成：{result.directory}\n\n仅包含控制算法 / ControlStep / ISR 模板，不包含 ADC、PWM、GPIO 或中断 BSP 配置。",
+        )
+
     def _request(self) -> None:
         try:
             config = self._config()
@@ -438,6 +706,41 @@ class PFCControlLabView(QWidget):
     def set_result(self, result) -> None:
         self.result = result
         analysis, line_cycle, switching = result
+        pm = analysis.current_loop.margins.phase_margin_deg
+        fc = analysis.current_loop.margins.critical_gain_crossover_hz
+        if pm is not None and pm < 45.0:
+            self.autotune_status.setText(
+                f"当前电流环裕量不足：PM={pm:.1f}°, fc={0 if fc is None else fc:.1f} Hz。建议点击“一键稳定整定并应用”。"
+            )
+            self.autotune_status.setStyleSheet("padding:6px;border:1px solid #fda29b;background:#fef3f2;color:#b42318;")
+        else:
+            # A Bode margin alone is not enough for a useful starting point.
+            # Confirm that the settled AC cycle and the local switching
+            # reconstruction remain finite/bounded before advertising the
+            # current controller as a usable baseline.
+            metrics = line_cycle.metrics
+            current_scale = max(metrics.input_current_rms_a, 1e-6)
+            tracking_ratio = metrics.current_error_rms_a / current_scale
+            sw_current = np.asarray(switching.signals.get("inductor_current", []), dtype=float)
+            time_ok = (
+                sw_current.size > 0
+                and np.all(np.isfinite(sw_current))
+                and np.all(np.isfinite(line_cycle.signals["i_inductor"]))
+                and tracking_ratio < 0.35
+            )
+            if pm is not None and pm >= 45.0 and time_ok:
+                self.autotune_status.setText(
+                    f"稳定性检查通过：PM={pm:.1f}°, fc={0 if fc is None else fc:.1f} Hz；"
+                    f"AC 电流误差 RMS={metrics.current_error_rms_a:.3f} A "
+                    f"({100*tracking_ratio:.1f}% Irms)，开关电流连续且有界。可在此基础上继续调优。"
+                )
+                self.autotune_status.setStyleSheet("padding:6px;border:1px solid #75e0a7;background:#ecfdf3;color:#067647;")
+            elif pm is not None and pm >= 45.0:
+                self.autotune_status.setText(
+                    f"线性 Bode 已稳定（PM={pm:.1f}°），但时域跟踪仍需检查："
+                    f"current error={100*tracking_ratio:.1f}% Irms。"
+                )
+                self.autotune_status.setStyleSheet("padding:6px;border:1px solid #fec84b;background:#fffaeb;color:#b54708;")
         self._cursor_frequency_hz = (
             analysis.current_loop.margins.critical_gain_crossover_hz
         )
@@ -445,6 +748,8 @@ class PFCControlLabView(QWidget):
         self._plot_ac_overview(line_cycle, analysis)
         self._plot_ac_control(line_cycle, analysis)
         self._plot_switching(switching)
+        self._plot_zero_crossing(line_cycle, analysis)
+        self._plot_harmonics(line_cycle)
         self._show_summary(analysis, line_cycle, switching)
 
     def _set_bode_results(self, analysis: PFCControlLabAnalysis) -> None:
@@ -453,6 +758,7 @@ class PFCControlLabView(QWidget):
         self.current_bode.set_curves(f, [
             PFCBodeCurve("plant_gid", "Gid 功率级", ci["plant_gid"]),
             PFCBodeCurve("controller_ci", "Ci 数字控制器", ci["controller_ci"]),
+            PFCBodeCurve("indu_comp_gain", "Kindu 电感电流补偿", ci["indu_comp_gain"]),
             PFCBodeCurve("pwm_zoh", "PWM/ZOH/延迟", ci["pwm_zoh"]),
             PFCBodeCurve("sense_hi_analog", "Hi 模拟滤波", ci["sense_hi_analog"]),
             PFCBodeCurve("sense_hi_adc", "Hi ADC/数字链", ci["sense_hi_adc"]),
@@ -538,6 +844,24 @@ class PFCControlLabView(QWidget):
                     for value in measurement.values
                 ],
             ]))
+            if self.result is not None:
+                analysis = self.result[0]
+                if sender is self.current_bode:
+                    responses = analysis.current_loop.responses
+                    labels = {"controller_ci":"Ci", "indu_comp_gain":"Kindu", "pwm_zoh":"PWM/ZOH", "plant_gid":"Gid", "sense_hi":"Current Sense", "open_current":"Li"}
+                    keys = ["controller_ci","indu_comp_gain","pwm_zoh","plant_gid","sense_hi","open_current"]
+                elif sender is self.voltage_bode:
+                    responses = analysis.voltage_loop.responses
+                    labels = {"controller_cv":"Cv", "amc_vff":"AMC/VFF", "current_closed_for_outer":"Closed current loop", "bus_plant_gvg":"Bus plant", "sense_hv":"Vbus Sense", "open_voltage":"Lv"}
+                    keys = ["controller_cv","amc_vff","current_closed_for_outer","bus_plant_gvg","sense_hv","open_voltage"]
+                else:
+                    responses, labels, keys = {}, {}, []
+                if keys:
+                    budget = phase_budget(analysis.frequencies_hz, responses, labels, measurement.frequency_hz, keys)
+                    self.phase_budget_label.setText(
+                        "Phase budget @ " + format_frequency(measurement.frequency_hz) + "\n" +
+                        " | ".join(f"{b.label}: {b.gain_db:+.2f} dB / {b.phase_deg:+.2f}°" for b in budget)
+                    )
         finally:
             self._syncing_cursor = False
 
@@ -677,7 +1001,9 @@ class PFCControlLabView(QWidget):
         axes[1].plot(time_us, s["inductor_voltage"], label="Inductor voltage")
         axes[1].set_ylabel("Voltage (V)")
 
-        axes[2].plot(time_us, s["inductor_current"], label="Inductor current")
+        axes[2].plot(time_us, s["inductor_current"], label="Inductor current (continuous)")
+        if "inductor_current_average" in s:
+            axes[2].plot(time_us, s["inductor_current_average"], linestyle="--", label="AC-workpoint average")
         axes[2].plot(time_us, s["boost_output_current"], label="Boost output current")
         axes[2].set_ylabel("Current (A)")
 
@@ -702,6 +1028,54 @@ class PFCControlLabView(QWidget):
         )
         figure.tight_layout()
         self.switch_canvas.draw_idle()
+
+    def _plot_zero_crossing(self, result: PFCLineCycleWaveforms, analysis: PFCControlLabAnalysis) -> None:
+        figure = self.zero_figure
+        figure.clear()
+        axes = [figure.add_subplot(511)]
+        for index in range(2, 6):
+            axes.append(figure.add_subplot(510 + index, sharex=axes[0]))
+        time_ms, s = self._last_ac_cycle(result, analysis.config.power_stage.line_frequency_hz)
+        # Show both zero crossings in the final line cycle, with state-code overlays.
+        axes[0].plot(time_ms, s["vac"], label="Vac")
+        axes[0].plot(time_ms, s["vac_measured"], label="Vac measured")
+        axes[0].axhline(15.0, linestyle=":", linewidth=0.8); axes[0].axhline(-15.0, linestyle=":", linewidth=0.8)
+        axes[0].set_ylabel("Vac (V)")
+        axes[1].plot(time_ms, s["i_input_signed"], label="Iac")
+        axes[1].plot(time_ms, s["i_ref"], label="Iref")
+        axes[1].set_ylabel("Current (A)")
+        axes[2].plot(time_ms, s["duty_ff"], label="Duty FF")
+        axes[2].plot(time_ms, s["duty_pi"], label="Duty PI")
+        axes[2].plot(time_ms, s["duty_total"], label="Duty total")
+        axes[2].set_ylabel("Duty")
+        axes[3].plot(time_ms, s["lf_gate_state"], label="LF bridge state")
+        axes[3].plot(time_ms, s["zc_deadband_fraction"], label="ZC deadband fraction")
+        axes[3].plot(time_ms, s["current_pi_reset_strobe"], label="PI reset")
+        axes[3].set_ylabel("State")
+        axes[4].step(time_ms, s["pwm_state_code"], where="post", label="PWM state code")
+        axes[4].plot(time_ms, s["minimum_pulse_active"], label="Min pulse active")
+        axes[4].set_ylabel("State code")
+        self._style_axes(axes, "Time in final AC period (ms)")
+        legend = ", ".join(f"{k}={v}" for k,v in PFC_PWM_STATE_NAMES.items())
+        figure.suptitle("TTPL Zero-Crossing Analyzer — " + legend, fontsize=9)
+        figure.tight_layout(); self.zero_canvas.draw_idle()
+
+    def _plot_harmonics(self, result: PFCLineCycleWaveforms) -> None:
+        figure = self.harmonic_figure
+        figure.clear()
+        ax = figure.add_subplot(111)
+        m = result.metrics
+        orders = np.asarray(m.harmonic_orders)
+        amps = np.asarray(m.harmonic_current_rms_a)
+        ax.bar(orders, amps)
+        ax.set_xlabel("Harmonic order")
+        ax.set_ylabel("Current RMS (A)")
+        ax.grid(True, axis="y", alpha=0.3)
+        ax.set_title(
+            f"PF={m.power_factor:.6f}, displacement={m.displacement_factor:.6f}, "
+            f"distortion={m.distortion_factor:.6f}, THD={m.current_thd_percent:.4f}%"
+        )
+        figure.tight_layout(); self.harmonic_canvas.draw_idle()
 
     def _show_summary(
         self,
@@ -733,7 +1107,9 @@ class PFCControlLabView(QWidget):
             f"GM={cv.gain_margin_db}, stable={analysis.voltage_loop.likely_stable}",
             "",
             f"PF={m.power_factor:.7f}, displacement={m.displacement_factor:.7f}, "
-            f"THD={m.current_thd_percent:.5f}%",
+            f"distortion={m.distortion_factor:.7f}, THD={m.current_thd_percent:.5f}%",
+            f"I1 RMS={m.fundamental_current_rms_a:.6f} A, min-pulse occupancy={m.minimum_pulse_fraction*100:.4f}%",
+            f"Zero-cross current-error RMS={m.zero_cross_current_error_rms_a:.6f} A",
             f"Vbus avg={m.bus_voltage_average_v:.5f} V, "
             f"ripple pp={m.bus_voltage_ripple_pp_v:.5f} V",
             f"Icap rms={m.bus_capacitor_current_rms_a:.5f} A, "

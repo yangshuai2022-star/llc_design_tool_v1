@@ -53,7 +53,7 @@ def cli(vin: float, vbus: float, power: float, line_hz: float, fsw_khz: float,
     )
     analysis = build_pfc_control_lab_analysis(config)
     line_cycle = simulate_pfc_line_cycle(config)
-    switching = build_pfc_switching_waveforms(config)
+    switching = build_pfc_switching_waveforms(config, line_cycle=line_cycle)
     paths = export_pfc_control_lab(analysis, line_cycle, switching, output)
     ci = analysis.current_loop.margins
     cv = analysis.voltage_loop.margins

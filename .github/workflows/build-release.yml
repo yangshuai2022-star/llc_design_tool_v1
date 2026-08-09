@@ -39,13 +39,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install pyinstaller
-          python -m pip install -e ".[gui]"
+          python -m pip install -e ".[gui,dev]"
+
+      - name: Run tests
+        run: python -m pytest
 
       - name: Build with PyInstaller
         run: |
           python -m PyInstaller --noconfirm --clean --windowed --name PowerDesignTool \
-            --collect-data llc_design --collect-data pfc_design \
-            --collect-submodules llc_design --collect-submodules pfc_design \
+            --collect-data llc_design --collect-data pfc_design --collect-data power_codegen \
+            --collect-submodules llc_design --collect-submodules pfc_design --collect-submodules power_codegen \
             packaging/launcher.py
         shell: bash
 
@@ -75,7 +78,12 @@ jobs:
           files: ${{ matrix.zip-name }}
           generate_release_notes: true
           body: |
-            Power Design Toolkit 双平台安装包 (自动构建)
+            Power Design Toolkit V7.2 双平台安装包（自动构建）
+
+            ## V7.2 主要功能
+            - LLC 谐振腔、Q/ZVS、磁件、损耗、波形和数字控制设计
+            - 单相 TTPL PFC 与三相 Vienna PFC 控制、Bode、波形和 PF/THD 分析
+            - LLC、TTPL、Vienna 平台无关 C99/Float32 控制代码生成
 
             ## Windows 11
             1. 解压 `PowerDesignTool-Windows-x64.zip`
@@ -89,5 +97,7 @@ jobs:
             3. 双击 `PowerDesignTool.app` 启动
 
             ## 使用
-            - 启动后先选择 LLC 或 PFC 工作区, 工具栏可随时切换
-            - 命令行版: `pfc-control-lab --output output/pfc_control_lab`
+            - 启动后先选择 LLC 或 PFC 工作区，工具栏可随时切换
+            - 单相 PFC CLI：`pfc-control-lab --output output/ttpl`
+            - Vienna CLI：`vienna-control-lab --output output/vienna`
+            - C99 代码生成：`python -m power_codegen --help`

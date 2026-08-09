@@ -148,6 +148,27 @@ class SelectableBodePanel(QWidget):
             self._checkboxes[curve.key] = checkbox
             self.selector_grid.addWidget(checkbox, index // columns, index % columns)
 
+
+    def focus_curve(self, key: str, *, keep_open_loop: bool = True) -> None:
+        """Show one selected block transfer together with the system open loop."""
+        if key not in self._checkboxes:
+            return
+        for curve in self._curves:
+            box = self._checkboxes[curve.key]
+            box.blockSignals(True)
+            visible = curve.key == key
+            if keep_open_loop and (curve.is_open_loop or curve.key == self._open_loop_key):
+                visible = True
+            box.setChecked(visible)
+            box.blockSignals(False)
+        self._redraw()
+
+    def set_curve_visible(self, key: str, visible: bool) -> None:
+        box = self._checkboxes.get(key)
+        if box is None:
+            return
+        box.setChecked(bool(visible))
+
     def show_open_loop_only(self) -> None:
         for curve in self._curves:
             box = self._checkboxes[curve.key]

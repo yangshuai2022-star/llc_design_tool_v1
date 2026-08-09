@@ -1,4 +1,4 @@
-Power Design Toolkit V6 source package
+Power Design Toolkit V7.2 source package
 
 Install core:
   python -m pip install -e .
@@ -13,14 +13,18 @@ Launch GUI:
   python -m llc_design gui
 
 The GUI opens with a function selector:
-  - LLC Design / Waveform / Digital Control
-  - PFC Current Loop / Voltage Loop / Sensing / Waveforms
+  - LLC resonant converter design, magnetics, waveforms and digital control
+  - Single-phase TTPL and three-phase Vienna PFC control workspaces
 
 LLC and PFC are independent top-level workspaces. Each window has toolbar
 actions for switching to the other workspace or returning to function selection.
 
-PFC Control Lab:
-  pfc-control-lab --output output/pfc_control_lab
+PFC control labs:
+  pfc-control-lab --output output/ttpl
+  vienna-control-lab --output output/vienna
+
+C99/Float32 control-code generation:
+  python -m power_codegen --help
 
 PFC Bode behavior:
   - Current-loop page defaults to Li open loop only.

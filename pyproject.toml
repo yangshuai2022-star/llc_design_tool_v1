@@ -1,7 +1,7 @@
 [project]
 name = "power-design-toolkit"
-version = "0.8.0"
-description = "PFC and LLC resonant converter engineering design calculators"
+version = "0.10.0"
+description = "Integrated LLC, single-phase TTPL PFC and three-phase Vienna PFC engineering design laboratory"
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24",
@@ -20,6 +20,9 @@ gui = ["PySide6>=6.7", "pyqtgraph>=0.13.7"]
 [project.scripts]
 pfc-design = "pfc_design.__main__:cli"
 pfc-control-lab = "pfc_design.control_cli:cli"
+vienna-control-lab = "pfc_design.vienna_cli:cli"
+power-control-codegen = "power_codegen.cli:cli"
+power-design-gui = "llc_design.gui.app:run_gui"
 llc-design = "llc_design.__main__:cli"
 llc-gui = "llc_design.gui.app:run_gui"
 
@@ -29,7 +32,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["pfc_design*", "llc_design*"]
+include = ["pfc_design*", "llc_design*", "power_codegen*"]
 exclude = ["*.output*", "*.__pycache__*"]
 
 [tool.setuptools.package-data]
@@ -37,5 +40,5 @@ exclude = ["*.output*", "*.__pycache__*"]
 "llc_design.data" = ["*.json"]
 
 [tool.pytest.ini_options]
-testpaths = ["pfc_design/tests", "llc_design/tests"]
+testpaths = ["pfc_design/tests", "llc_design/tests", "power_codegen/tests"]
 addopts = "-q"

@@ -175,6 +175,7 @@ class PFCPowerStageConfig:
     duty_min: float = 0.01
     duty_max: float = 0.98
     minimum_effective_pulse_s: float = 0.0
+    deadtime_s: float = 100.0e-9
 
     @property
     def line_peak_v(self) -> float:
@@ -226,8 +227,8 @@ class PFCPowerStageConfig:
             raise ValueError("line angle must lie between 0 and 180 degrees")
         if not 0.0 <= self.duty_min < self.duty_max <= 1.0:
             raise ValueError("invalid duty limits")
-        if self.minimum_effective_pulse_s < 0.0:
-            raise ValueError("minimum pulse width cannot be negative")
+        if self.minimum_effective_pulse_s < 0.0 or self.deadtime_s < 0.0:
+            raise ValueError("minimum pulse width/deadtime cannot be negative")
 
 
 @dataclass(frozen=True)
@@ -372,6 +373,7 @@ class PFCControlLabConfig:
     waveform_line_cycles: int = 8
     switching_cycles: int = 2
     switching_samples_per_cycle: int = 800
+    waveform_integration_rate_hz: float = 500.0e3
 
     def validate(self) -> None:
         self.power_stage.validate()
@@ -391,6 +393,8 @@ class PFCControlLabConfig:
             raise ValueError("switching waveform cycles must lie in [1, 50]")
         if self.switching_samples_per_cycle < 100:
             raise ValueError("at least 100 switching samples per cycle are required")
+        if self.waveform_integration_rate_hz < 4.0 * self.firmware.current_loop_rate_hz:
+            raise ValueError("waveform integration rate must be at least 4x current-loop rate")
 
 
 __all__ = [

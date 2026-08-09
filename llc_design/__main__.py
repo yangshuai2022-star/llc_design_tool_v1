@@ -13,6 +13,10 @@ from .core.tank import GainNotReachableError
 from .models.devices import DeviceDatabase
 from .models.system import LLCSystemAnalyzer
 from .magnetics.core import CoreDatabase
+from .magnetics.transformer_designer import (TransformerSynthesisSettings,
+                                              export_transformer_synthesis,
+                                              load_transformer_core_presets,
+                                              synthesize_transformer)
 from .optimization.sweep import LLCOptimizer, OptimizationConfig
 from .report.export import export_calculation_book
 from .control.analysis import build_small_signal_analysis, export_small_signal_analysis
@@ -48,6 +52,42 @@ def _override(spec: LLCDesignSpec, **values) -> LLCDesignSpec:
 @click.group()
 def cli():
     """LLC half/full-bridge + full-bridge SR design and optimization tool."""
+
+
+@cli.command("transformer-design")
+@click.option("--config", type=click.Path(exists=True, dir_okay=False), default=None)
+@click.option("--preset", default="TDK_PQ35_35_B65881A_N87", show_default=True,
+              help="Ferrite/core preset key; GUI also allows direct datasheet entry.")
+@click.option("--bmax", type=float, default=0.18, show_default=True, help="Design Bpk limit (T)")
+@click.option("--strand-mm", type=float, default=0.10, show_default=True, help="Litz copper strand diameter (mm)")
+@click.option("--strand-step", type=int, default=50, show_default=True, help="Strand-count rounding step")
+@click.option("--j", "current_density", type=float, default=6.0, show_default=True, help="Target copper current density (A/mm^2)")
+@click.option("--output", type=click.Path(file_okay=False), default="output/transformer_design", show_default=True)
+def transformer_design(config, preset, bmax, strand_mm, strand_step, current_density, output):
+    """Synthesize LLC transformer turns/Litz and export magnetic/copper losses."""
+    spec = _base_spec(config)
+    presets = load_transformer_core_presets()
+    if preset not in presets:
+        raise click.ClickException(f"unknown transformer preset: {preset}; available={', '.join(presets)}")
+    settings = TransformerSynthesisSettings(
+        max_flux_density_t=bmax,
+        strand_copper_diameter_mm=strand_mm,
+        strand_outer_diameter_mm=strand_mm * 1.12,
+        strand_count_step=strand_step,
+        current_density_target_a_per_mm2=current_density,
+    )
+    result = synthesize_transformer(spec, presets[preset], settings)
+    paths = export_transformer_synthesis(result, output)
+    click.echo(f"Core: {result.core.shape} {result.core.material_grade} {result.core.part_number}")
+    click.echo(f"Turns: {result.primary_turns}:{result.secondary_turns} (ratio={result.actual_turns_ratio:.5f})")
+    click.echo(f"Primary Litz: {result.primary_litz.description}; J={result.primary_litz.current_density_a_per_mm2:.2f} A/mm2")
+    click.echo(f"Secondary Litz: {result.secondary_litz.description}; J={result.secondary_litz.current_density_a_per_mm2:.2f} A/mm2")
+    click.echo(f"Bpk(max): {result.worst_b_peak_t*1e3:.2f} mT; fill={result.fill_factor*100:.1f}%")
+    click.echo(f"Loss nominal: core={result.nominal_loss.core_w:.3f} W, CuP={result.nominal_loss.primary_copper_w:.3f} W, CuS={result.nominal_loss.secondary_copper_w:.3f} W, total={result.nominal_loss.total_w:.3f} W")
+    click.echo(f"Feasible: {result.feasible}")
+    for reason in result.reasons:
+        click.echo(f"  - {reason}")
+    click.echo(f"Export: {paths['json']}")
 
 
 @cli.command()

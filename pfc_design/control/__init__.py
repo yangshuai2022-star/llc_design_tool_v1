@@ -37,6 +37,8 @@ from .waveforms import (
     simulate_pfc_line_cycle,
 )
 
+from .autotune import CurrentLoopEnvelopePoint, CurrentLoopTuneResult, tune_pfc_current_loop
+
 __all__ = [
     "ADCTimingConfig",
     "ControllerConfig",
@@ -67,4 +69,7 @@ __all__ = [
     "sense_frequency_response",
     "simulate_pfc_line_cycle",
     "summarize_sense_chain",
+    "CurrentLoopEnvelopePoint",
+    "CurrentLoopTuneResult",
+    "tune_pfc_current_loop",
 ]

@@ -49,7 +49,7 @@ class WorkspaceSelectionDialog(QDialog):
         )
         pfc_button = self._choice_button(
             "进入 PFC 设计",
-            "电流内环、母线电压外环、采样滤波、AC 周期与开关周期",
+            "单相 TTPL + 三相 Vienna：双环控制、采样链、Bode、AC 周期、开关波形与 PF/THD",
         )
         llc_button.clicked.connect(lambda: self._select("llc"))
         pfc_button.clicked.connect(lambda: self._select("pfc"))
