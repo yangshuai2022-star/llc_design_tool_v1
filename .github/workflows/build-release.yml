@@ -78,10 +78,13 @@ jobs:
           files: ${{ matrix.zip-name }}
           generate_release_notes: true
           body: |
-            Power Design Toolkit V7.4 双平台安装包（自动构建）
+            Power Design Toolkit V7.5 双平台安装包（自动构建）
 
-            ## V7.4 主要功能
-            - 新增"检查更新": 后台联网查询 GitHub 最新 Release, 有新版本时展示
+            ## V7.5 主要功能
+            - GUI 自动适配 Windows 11 深色/浅色主题：启动时检测系统外观并切换配色，
+              解决深色主题下浅色背景 + 跟随系统的浅色文字导致整屏不可见的问题
+            - README 新增开发时间线，同步展示功能演进与缺陷修复
+            - 新增“检查更新”: 后台联网查询 GitHub 最新 Release, 有新版本时展示
               发布说明并提供下载页跳转; 启动后自动静默检查
             - 工具栏右上角新增联系方式: 邮箱 maileyang@qq.com / 微信 maileyang
             - TTPL/Vienna PFC 电感设计页（Magnetics High Flux Core Data 254、
