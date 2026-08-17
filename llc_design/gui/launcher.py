@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from llc_design.core.spec import LLCDesignSpec
+from llc_design.gui import theme
 from llc_design.gui.main_window import LLCMainWindow
 from pfc_design.gui.main_window import PFCMainWindow
 
@@ -25,6 +26,7 @@ class WorkspaceSelectionDialog(QDialog):
         self.setWindowTitle("电源设计工具箱 — 选择设计功能")
         self.setMinimumSize(760, 420)
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
+        self.setStyleSheet(theme.launcher_stylesheet(theme.active_theme()))
 
         root = QVBoxLayout(self)
         title = QLabel("请选择进入的设计工作区")
@@ -63,16 +65,17 @@ class WorkspaceSelectionDialog(QDialog):
 
     @staticmethod
     def _choice_button(title: str, description: str) -> QPushButton:
+        t = theme.active_theme()
         button = QPushButton(f"{title}\n\n{description}")
         button.setMinimumSize(320, 180)
         button.setStyleSheet(
             "QPushButton {"
-            "font-size: 16px; font-weight: 600; text-align: center;"
-            "padding: 24px; border: 2px solid #777; border-radius: 10px;"
-            "background: #f5f5f5;"
+            f"font-size: 16px; font-weight: 600; text-align: center;"
+            f"padding: 24px; border: 2px solid {t.border_input}; border-radius: 10px;"
+            f"background: {t.surface_alt}; color: {t.text_strong};"
             "}"
-            "QPushButton:hover {background: #e8eef7; border-color: #365f91;}"
-            "QPushButton:pressed {background: #d9e5f4;}"
+            f"QPushButton:hover {{background: {t.hover}; border-color: {t.accent};}}"
+            f"QPushButton:pressed {{background: {t.pressed};}}"
         )
         return button
 

@@ -33,6 +33,7 @@ from pfc_design.magnetics import (
     PFCInductorDesignResult,
     design_pfc_inductor,
 )
+from llc_design.gui import theme
 
 
 class PFCInductorDesignEditor(QWidget):
@@ -62,7 +63,7 @@ class PFCInductorDesignEditor(QWidget):
             "漆包圆铜线，铜损默认仅计算 DC I²R，不计趋肤/邻近效应。"
         )
         intro.setWordWrap(True)
-        intro.setStyleSheet("color:#475467;padding:4px 2px;")
+        intro.setStyleSheet(f"color:{theme.active_theme().text_muted};padding:4px 2px;")
         root.addWidget(intro)
 
         op_group = QGroupBox("工作点 / 目标")
@@ -130,8 +131,9 @@ class PFCInductorDesignEditor(QWidget):
 
         self.status = QLabel("等待计算")
         self.status.setWordWrap(True)
+        _t = theme.active_theme()
         self.status.setStyleSheet(
-            "padding:6px;border:1px solid #d0d5dd;border-radius:5px;background:#f8fafc;color:#344054;"
+            f"padding:6px;border:1px solid {_t.border_card};border-radius:5px;background:{_t.card_bg};color:{_t.text};"
         )
         root.addWidget(self.status)
         root.addStretch(1)

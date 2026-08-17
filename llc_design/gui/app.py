@@ -8,12 +8,14 @@ from PySide6.QtWidgets import QApplication
 
 from ..core.config import load_spec
 from ..core.spec import LLCDesignSpec
+from . import theme
 from .launcher import WorkspaceApplicationController
 
 
 def run_gui(config_path: str | None = None) -> int:
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName("Power Design Toolkit")
+    theme.apply_app_theme(app)
     spec = load_spec(config_path) if config_path else LLCDesignSpec()
     controller = WorkspaceApplicationController(spec)
     if not controller.start():

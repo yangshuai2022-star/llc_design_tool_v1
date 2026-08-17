@@ -62,6 +62,7 @@ from .bode_cursor import (
 )
 from .control_block_diagram import BlockSpec, ConnectionSpec, ControlBlockDiagram
 from .sense_schematic import AnalogSenseSchematic
+from .. import theme
 from power_codegen import generate_llc_control_code
 
 
@@ -82,10 +83,10 @@ class DigitalLoopView(QWidget):
 
         diagram_header = QHBoxLayout()
         title = QLabel("LLC 数字控制信号链")
-        title.setStyleSheet("font-size:15px;font-weight:600;color:#344054;")
+        title.setStyleSheet(f"font-size:15px;font-weight:600;color:{theme.active_theme().text};")
         diagram_header.addWidget(title)
         hint = QLabel("点击模块联动参数/Bode · 滚轮缩放 · 拖动平移 · 双击空白适应窗口")
-        hint.setStyleSheet("color:#667085;")
+        hint.setStyleSheet(f"color:{theme.active_theme().text_muted};")
         diagram_header.addWidget(hint)
         diagram_header.addStretch(1)
 
@@ -172,10 +173,10 @@ class DigitalLoopView(QWidget):
 
         header = QHBoxLayout()
         heading = QLabel("LLC 数字控制信号链")
-        heading.setStyleSheet("font-size:18px;font-weight:700;color:#101828;")
+        heading.setStyleSheet(f"font-size:18px;font-weight:700;color:{theme.active_theme().text_strong};")
         header.addWidget(heading)
         note = QLabel("滚轮缩放 · 左键拖动平移 · 双击空白适应窗口 · 点击模块同步主界面")
-        note.setStyleSheet("color:#667085;")
+        note.setStyleSheet(f"color:{theme.active_theme().text_muted};")
         header.addWidget(note)
         header.addStretch(1)
 
@@ -342,11 +343,11 @@ class DigitalLoopView(QWidget):
         layout.setContentsMargins(8, 8, 8, 10)
         layout.setSpacing(7)
         heading = QLabel(title)
-        heading.setStyleSheet("font-size:14px;font-weight:600;color:#344054;")
+        heading.setStyleSheet(f"font-size:14px;font-weight:600;color:{theme.active_theme().text};")
         layout.addWidget(heading)
         desc = QLabel(description)
         desc.setWordWrap(True)
-        desc.setStyleSheet("color:#667085;padding-bottom:3px;")
+        desc.setStyleSheet(f"color:{theme.active_theme().text_muted};padding-bottom:3px;")
         layout.addWidget(desc)
         return content, layout
 
@@ -387,7 +388,7 @@ class DigitalLoopView(QWidget):
         detail_layout.setContentsMargins(6, 7, 6, 7)
         detail_layout.setSpacing(5)
         self.detail_title = QLabel("数字控制器 / PCMD 限幅")
-        self.detail_title.setStyleSheet("font-weight:600;color:#344054;")
+        self.detail_title.setStyleSheet(f"font-weight:600;color:{theme.active_theme().text};")
         detail_layout.addWidget(self.detail_title)
         self.detail_diagram = ControlBlockDiagram()
         self.detail_diagram.setMinimumHeight(150)
@@ -395,7 +396,7 @@ class DigitalLoopView(QWidget):
         detail_layout.addWidget(self.detail_diagram)
         detail_hint = QLabel("局部图为矢量图，可滚轮放大；顶部“全屏框图”用于查看完整闭环。")
         detail_hint.setWordWrap(True)
-        detail_hint.setStyleSheet("color:#667085;font-size:11px;")
+        detail_hint.setStyleSheet(f"color:{theme.active_theme().text_muted};font-size:11px;")
         detail_layout.addWidget(detail_hint)
         layout.addWidget(detail_box)
 
@@ -509,7 +510,7 @@ class DigitalLoopView(QWidget):
         form.addRow("CLA 计算时间", self.computation_us)
         form.addRow(self.include_zoh)
         note = QLabel("PWM 命令在 Counter-Zero / Global-Load 生效；分析会给出最小、标称、最大 Zero 等待延迟。")
-        note.setWordWrap(True); note.setStyleSheet("color:#667085;")
+        note.setWordWrap(True); note.setStyleSheet(f"color:{theme.active_theme().text_muted};")
         pl.addWidget(timing); pl.addWidget(note); pl.addStretch(1)
         self._add_parameter_page("pwm", page)
 
@@ -601,7 +602,7 @@ class DigitalLoopView(QWidget):
         self.plot_group.currentIndexChanged.connect(self.refresh)
         top.addWidget(self.plot_group)
         default_hint = QLabel("默认只看系统开环，减少无关曲线干扰")
-        default_hint.setStyleSheet("color:#667085;")
+        default_hint.setStyleSheet(f"color:{theme.active_theme().text_muted};")
         top.addWidget(default_hint)
         top.addStretch(1)
         layout.addLayout(top)
@@ -616,15 +617,16 @@ class DigitalLoopView(QWidget):
         status_row = QHBoxLayout()
         self.cursor_status = QLabel("光标：在 Bode 幅频/相频图内单击并拖动")
         self.cursor_status.setWordWrap(True)
+        _t = theme.active_theme()
         self.cursor_status.setStyleSheet(
-            "QLabel {padding:5px 7px;border:1px solid #d0d5dd;border-radius:5px;"
-            "background:#f8fafc;color:#344054;}"
+            f"QLabel {{padding:5px 7px;border:1px solid {_t.border_card};border-radius:5px;"
+            f"background:{_t.card_bg};color:{_t.text};}}"
         )
         self.phase_budget_label = QLabel("Phase budget：运行后显示交越频率各环节 Gain / Phase")
         self.phase_budget_label.setWordWrap(True)
         self.phase_budget_label.setStyleSheet(
-            "QLabel {padding:5px 7px;border:1px solid #d0d5dd;border-radius:5px;"
-            "background:#fbfcfe;color:#344054;}"
+            f"QLabel {{padding:5px 7px;border:1px solid {_t.border_card};border-radius:5px;"
+            f"background:{_t.card_bg_alt};color:{_t.text};}}"
         )
         status_row.addWidget(self.cursor_status, 1)
         status_row.addWidget(self.phase_budget_label, 1)

@@ -41,6 +41,7 @@ from llc_design.gui.widgets.control_block_diagram import (
     ControlBlockDiagram,
 )
 from llc_design.gui.widgets.sense_schematic import AnalogSenseSchematic
+from llc_design.gui import theme
 from pfc_design.control.config import (
     ADCTimingConfig,
     DigitalFilterConfig,
@@ -85,10 +86,10 @@ class ViennaControlLabView(QWidget):
         diagram_bar = QHBoxLayout()
         diagram_bar.setSpacing(6)
         diagram_title = QLabel("Vienna PFC 双环 / 中点平衡")
-        diagram_title.setStyleSheet("font-size:15px;font-weight:600;color:#344054;")
+        diagram_title.setStyleSheet(f"font-size:15px;font-weight:600;color:{theme.active_theme().text};")
         diagram_bar.addWidget(diagram_title)
         diagram_hint = QLabel("Vdc 外环 + ABC 电流内环 + Midpoint Balance · 点击模块联动参数/Bode")
-        diagram_hint.setStyleSheet("color:#667085;")
+        diagram_hint.setStyleSheet(f"color:{theme.active_theme().text_muted};")
         diagram_bar.addWidget(diagram_hint)
         diagram_bar.addStretch(1)
 
@@ -201,7 +202,7 @@ class ViennaControlLabView(QWidget):
         layout = QVBoxLayout(dialog)
         bar = QHBoxLayout()
         title = QLabel("Vienna：Vdc 外环 + ABC 电流内环 + Midpoint Balance")
-        title.setStyleSheet("font-size:18px;font-weight:700;color:#101828;")
+        title.setStyleSheet(f"font-size:18px;font-weight:700;color:{theme.active_theme().text_strong};")
         bar.addWidget(title); bar.addStretch(1)
         big = ControlBlockDiagram(dialog)
         for text, slot in (("适应窗口", big.fit_to_view), ("100%", big.actual_size), ("−", big.zoom_out), ("＋", big.zoom_in)):
@@ -455,10 +456,11 @@ class ViennaControlLabView(QWidget):
         status_row.setSpacing(6)
         self.cursor = QLabel("Bode 光标：主环路默认仅显示系统开环；点击框图环节可聚焦对应传递函数。")
         self.cursor.setWordWrap(True)
-        self.cursor.setStyleSheet("QLabel {padding:5px 7px;border:1px solid #d0d5dd;border-radius:5px;background:#f8fafc;color:#344054;}")
+        _t = theme.active_theme()
+        self.cursor.setStyleSheet(f"QLabel {{padding:5px 7px;border:1px solid {_t.border_card};border-radius:5px;background:{_t.card_bg};color:{_t.text};}}")
         self.budget = QLabel("Phase budget：拖动光标查看当前频率的幅相贡献。")
         self.budget.setWordWrap(True)
-        self.budget.setStyleSheet("QLabel {padding:5px 7px;border:1px solid #d0d5dd;border-radius:5px;background:#fbfcfe;color:#344054;}")
+        self.budget.setStyleSheet(f"QLabel {{padding:5px 7px;border:1px solid {_t.border_card};border-radius:5px;background:{_t.card_bg_alt};color:{_t.text};}}")
         status_row.addWidget(self.cursor, 1); status_row.addWidget(self.budget, 2)
         layout.addLayout(status_row)
 

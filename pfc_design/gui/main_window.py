@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QMainWindow,QMessageBox,QProgressBar,QSizePolicy,Q
 
 from llc_design.gui.workers import FunctionWorker
 from llc_design.gui.updater import add_toolbar_right_side, check_for_updates
+from llc_design.gui import theme
 from pfc_design.control import PFCControlLabConfig,build_pfc_control_lab_analysis,build_pfc_switching_waveforms,simulate_pfc_line_cycle
 from pfc_design.vienna import (
     ViennaControlLabConfig,
@@ -53,30 +54,7 @@ class PFCMainWindow(QMainWindow):
     def _apply_pfc_style(self):
         # Match the proven LLC workspace styling so Windows 11, macOS and Linux
         # do not fall back to visibly different native widget chrome.
-        self.setStyleSheet(
-            """
-            QMainWindow { background: #f4f6f8; }
-            QToolBar { background: #ffffff; border-bottom: 1px solid #d9dee7; spacing: 4px; padding: 3px 6px; }
-            QToolButton { padding: 4px 10px; border-radius: 5px; }
-            QToolButton:hover { background: #eef4ff; }
-            QTabWidget::pane { border: 1px solid #d9dee7; background: #ffffff; top: -1px; }
-            QTabBar::tab { background: #f2f4f7; border: 1px solid #d9dee7; padding: 7px 14px; margin-right: 2px; min-height: 20px; }
-            QTabBar::tab:selected { background: #ffffff; color: #175cd3; border-bottom-color: #ffffff; font-weight: 600; }
-            QGroupBox { background: #ffffff; border: 1px solid #d9dee7; border-radius: 7px; margin-top: 12px; padding-top: 8px; font-weight: 600; }
-            QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; color: #344054; }
-            QDoubleSpinBox, QSpinBox, QComboBox { min-height: 25px; padding: 1px 4px; background:#ffffff; border:1px solid #b9c2cf; border-radius:4px; }
-            QDoubleSpinBox:focus, QSpinBox:focus, QComboBox:focus { border-color:#528bff; }
-            QPushButton { min-height: 29px; padding: 3px 10px; border: 1px solid #b9c2cf; border-radius: 5px; background: #ffffff; }
-            QPushButton:hover { background: #eef4ff; border-color: #84adff; }
-            QPushButton:pressed { background: #dbe8ff; }
-            QPushButton:checked { background:#eaf2ff; border-color:#84adff; color:#175cd3; }
-            QCheckBox { spacing: 6px; color:#344054; }
-            QPlainTextEdit { background: #ffffff; border: 1px solid #d9dee7; }
-            QScrollArea { border: none; background: transparent; }
-            QSplitter::handle { background:#eef1f5; }
-            QStatusBar { background:#ffffff; border-top:1px solid #d9dee7; }
-            """
-        )
+        self.setStyleSheet(theme.workspace_stylesheet(theme.active_theme()))
 
     def _run_current(self):
         w=self.subtabs.currentWidget()

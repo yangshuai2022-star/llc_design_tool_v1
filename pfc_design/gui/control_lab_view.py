@@ -39,6 +39,7 @@ from llc_design.control.digital_loop import (
 )
 from llc_design.gui.widgets.control_block_diagram import BlockSpec, ConnectionSpec, ControlBlockDiagram
 from llc_design.gui.widgets.sense_schematic import AnalogSenseSchematic
+from llc_design.gui import theme
 from llc_design.control.phase_budget import phase_budget
 from llc_design.gui.widgets.bode_cursor import (
     BodeCursorMeasurement,
@@ -91,10 +92,10 @@ class PFCControlLabView(QWidget):
         diagram_bar = QHBoxLayout()
         diagram_bar.setSpacing(6)
         diagram_title = QLabel("TTPL PFC 双环控制")
-        diagram_title.setStyleSheet("font-size:15px;font-weight:600;color:#344054;")
+        diagram_title.setStyleSheet(f"font-size:15px;font-weight:600;color:{theme.active_theme().text};")
         diagram_bar.addWidget(diagram_title)
         diagram_hint = QLabel("双层主链 + 采样/前馈 · 点击模块联动参数/Bode · 滚轮缩放")
-        diagram_hint.setStyleSheet("color:#667085;")
+        diagram_hint.setStyleSheet(f"color:{theme.active_theme().text_muted};")
         diagram_bar.addWidget(diagram_hint)
         diagram_bar.addStretch(1)
 
@@ -220,7 +221,7 @@ class PFCControlLabView(QWidget):
         layout = QVBoxLayout(dialog)
         bar = QHBoxLayout()
         title = QLabel("TTPL PFC：电压外环 + 电流内环 + Duty Feedforward")
-        title.setStyleSheet("font-size:18px;font-weight:700;color:#101828;")
+        title.setStyleSheet(f"font-size:18px;font-weight:700;color:{theme.active_theme().text_strong};")
         bar.addWidget(title); bar.addStretch(1)
         big = ControlBlockDiagram(dialog)
         buttons = []
@@ -275,7 +276,8 @@ class PFCControlLabView(QWidget):
             "Bode 默认只显示系统开环 Li/Lv。每个 Bode 页面上方可独立开启或关闭任意传递函数。"
         )
         note.setWordWrap(True)
-        note.setStyleSheet("padding: 6px; border: 1px solid #aaa; background: #f7f7f7;")
+        _t = theme.active_theme()
+        note.setStyleSheet(f"padding: 6px; border: 1px solid {_t.border_card}; background: {_t.card_bg}; color: {_t.text};")
         layout.addWidget(note)
         layout.addStretch(1)
         scroll.setWidget(content)
@@ -526,13 +528,14 @@ class PFCControlLabView(QWidget):
             "Bode 光标：运行后在幅频/相频图中单击或拖动。"
         )
         self.cursor_status.setWordWrap(True)
+        _t = theme.active_theme()
         self.cursor_status.setStyleSheet(
-            "QLabel {padding:5px 7px;border:1px solid #d0d5dd;border-radius:5px;background:#f8fafc;color:#344054;}"
+            f"QLabel {{padding:5px 7px;border:1px solid {_t.border_card};border-radius:5px;background:{_t.card_bg};color:{_t.text};}}"
         )
         self.phase_budget_label = QLabel("Phase budget：点击框图环节或拖动光标查看幅相贡献。")
         self.phase_budget_label.setWordWrap(True)
         self.phase_budget_label.setStyleSheet(
-            "QLabel {padding:5px 7px;border:1px solid #d0d5dd;border-radius:5px;background:#fbfcfe;color:#344054;}"
+            f"QLabel {{padding:5px 7px;border:1px solid {_t.border_card};border-radius:5px;background:{_t.card_bg_alt};color:{_t.text};}}"
         )
         status_row.addWidget(self.cursor_status, 1)
         status_row.addWidget(self.phase_budget_label, 2)

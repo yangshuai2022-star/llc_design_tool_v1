@@ -25,6 +25,7 @@ from matplotlib.figure import Figure
 
 from ...control.analysis import SmallSignalAnalysis
 from ...control.linearize import ControlInputKind, SISOTransferFunction
+from .. import theme
 from .bode_cursor import (
     BodeCursor,
     BodeCursorMeasurement,
@@ -107,9 +108,10 @@ class SmallSignalView(QWidget):
 
         self.cursor_status = QLabel("Bode 光标：在幅频图或相频图内单击并拖动竖线")
         self.cursor_status.setWordWrap(True)
+        _t = theme.active_theme()
         self.cursor_status.setStyleSheet(
-            "QLabel { padding: 5px; border: 1px solid #b8b8b8; "
-            "background: #f6f6f6; font-family: monospace; }"
+            f"QLabel {{ padding: 5px; border: 1px solid {_t.border_card}; "
+            f"background: {_t.card_bg}; color: {_t.text}; font-family: monospace; }}"
         )
         layout.addWidget(self.cursor_status)
         self.figure = Figure(figsize=(10, 6))

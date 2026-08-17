@@ -54,6 +54,7 @@ from ..magnetics.transformer_designer import (FerriteCoreInput, TransformerSynth
 from ..models.devices import DeviceDatabase
 from .workers import FunctionWorker
 from .updater import add_toolbar_right_side, check_for_updates
+from . import theme
 
 from .widgets.small_signal_view import SmallSignalView
 from .widgets.digital_loop_view import DigitalLoopView
@@ -254,27 +255,7 @@ class LLCMainWindow(QMainWindow):
             self.run_design()
 
     def _apply_llc_style(self) -> None:
-        self.setStyleSheet(
-            """
-            QMainWindow { background: #f4f6f8; }
-            QToolBar { background: #ffffff; border-bottom: 1px solid #d9dee7; spacing: 4px; padding: 3px 6px; }
-            QToolButton { padding: 4px 10px; border-radius: 5px; }
-            QToolButton:hover { background: #eef4ff; }
-            QDockWidget { font-weight: 600; color: #344054; }
-            QDockWidget::title { background: #f8fafc; border-bottom: 1px solid #d9dee7; padding: 7px 10px; }
-            QTabWidget::pane { border: 1px solid #d9dee7; background: #ffffff; top: -1px; }
-            QTabBar::tab { background: #f2f4f7; border: 1px solid #d9dee7; padding: 7px 14px; margin-right: 2px; }
-            QTabBar::tab:selected { background: #ffffff; color: #175cd3; border-bottom-color: #ffffff; font-weight: 600; }
-            QGroupBox { background: #ffffff; border: 1px solid #d9dee7; border-radius: 7px; margin-top: 12px; padding-top: 8px; font-weight: 600; }
-            QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; color: #344054; }
-            QDoubleSpinBox, QSpinBox, QComboBox { min-height: 25px; padding: 1px 4px; }
-            QPushButton { min-height: 29px; padding: 3px 10px; border: 1px solid #b9c2cf; border-radius: 5px; background: #ffffff; }
-            QPushButton:hover { background: #eef4ff; border-color: #84adff; }
-            QPushButton:pressed { background: #dbe8ff; }
-            QPlainTextEdit { background: #ffffff; border: 1px solid #d9dee7; }
-            QScrollArea { border: none; background: transparent; }
-            """
-        )
+        self.setStyleSheet(theme.workspace_stylesheet(theme.active_theme()))
 
     def _spin(self, minimum, maximum, decimals, suffix="") -> QDoubleSpinBox:
         widget = QDoubleSpinBox()
@@ -294,7 +275,7 @@ class LLCMainWindow(QMainWindow):
         layout.setSpacing(8)
         hint = QLabel("全局 LLC 设计输入。需要最大化图形区域时，可按 F4 隐藏此面板，F9 进入专注模式。")
         hint.setWordWrap(True)
-        hint.setStyleSheet("color:#667085;padding:2px 2px 6px 2px;")
+        hint.setStyleSheet(f"color:{theme.active_theme().text_muted};padding:2px 2px 6px 2px;")
         layout.addWidget(hint)
         self.fields: dict[str, object] = {}
 

@@ -28,6 +28,7 @@ from llc_design.gui.widgets.bode_cursor import (
     BodeCursorMeasurement,
     BodeCursorTrace,
 )
+from llc_design.gui import theme
 
 
 @dataclass(frozen=True)
@@ -75,7 +76,7 @@ class SelectableBodePanel(QWidget):
         self.selector_toggle.setToolTip("展开/收起逐传递函数复选框；默认折叠以给 Bode 图更多垂直空间")
         selector_bar.addWidget(self.selector_toggle)
         selector_note = QLabel("默认仅显示系统开环；需要分解时再展开")
-        selector_note.setStyleSheet("color:#667085;")
+        selector_note.setStyleSheet(f"color:{theme.active_theme().text_muted};")
         selector_bar.addWidget(selector_note)
         selector_bar.addStretch(1)
         root.addLayout(selector_bar)

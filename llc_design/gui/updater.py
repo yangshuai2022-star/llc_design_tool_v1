@@ -14,6 +14,8 @@ from PySide6.QtCore import QObject, QThread, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QLabel, QMessageBox, QToolButton
 
+from llc_design.gui import theme
+
 #: 与 pyproject.toml / GitHub tag 保持一致的当前版本号。
 APP_VERSION = "7.4.0"
 
@@ -122,9 +124,10 @@ def add_toolbar_right_side(toolbar, main_window) -> None:
 
     ``toolbar`` 必须已添加过可伸缩 spacer,此函数只在 spacer 之后追加内容。
     """
+    muted = theme.active_theme().text_muted
     email_label = QLabel(
-        '<a href="mailto:maileyang@qq.com" style="color:#57606a;'
-        'text-decoration:none;font-size:12px;">maileyang@qq.com</a>'
+        f'<a href="mailto:maileyang@qq.com" style="color:{muted};'
+        f'text-decoration:none;font-size:12px;">maileyang@qq.com</a>'
     )
     email_label.setToolTip("联系邮箱(点击发送邮件)")
     email_label.setOpenExternalLinks(True)
@@ -133,7 +136,7 @@ def add_toolbar_right_side(toolbar, main_window) -> None:
     wechat_label = QLabel("微信: maileyang")
     wechat_label.setToolTip("微信号: maileyang")
     wechat_label.setStyleSheet(
-        "color:#57606a;font-size:12px;padding:0 6px;background:transparent;")
+        f"color:{muted};font-size:12px;padding:0 6px;background:transparent;")
     toolbar.addWidget(wechat_label)
 
     update_button = QToolButton()

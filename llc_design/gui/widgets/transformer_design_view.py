@@ -35,6 +35,7 @@ from ...magnetics.transformer_designer import (
     TransformerSynthesisSettings,
     load_transformer_core_presets,
 )
+from .. import theme
 
 
 class TransformerWindingSketch(QWidget):
@@ -134,9 +135,9 @@ class TransformerDesignView(QWidget):
 
         header = QHBoxLayout()
         title = QLabel("LLC 变压器自动设计")
-        title.setStyleSheet("font-size:18px;font-weight:700;color:#101828;")
+        title.setStyleSheet(f"font-size:18px;font-weight:700;color:{theme.active_theme().text_strong};")
         subtitle = QLabel("规格书磁芯参数 → 自动匝数 / 0.1 mm Litz → 绕组、磁芯损耗与工况校核")
-        subtitle.setStyleSheet("color:#667085;")
+        subtitle.setStyleSheet(f"color:{theme.active_theme().text_muted};")
         header.addWidget(title); header.addWidget(subtitle); header.addStretch(1)
         self.run_btn = QPushButton("自动设计变压器")
         self.run_btn.setStyleSheet("font-weight:600;padding:6px 16px;")
@@ -218,7 +219,7 @@ class TransformerDesignView(QWidget):
         ):
             f.addRow(label, w)
         note = QLabel("Litz 总股数自动取 50、100、150… 的倍数（步进可改）；高电流绕组会自动提示并束数量。")
-        note.setWordWrap(True); note.setStyleSheet("color:#667085;")
+        note.setWordWrap(True); note.setStyleSheet(f"color:{theme.active_theme().text_muted};")
         lay.addWidget(design); lay.addWidget(note)
         lay.addStretch(1)
         scroll.setWidget(body)
