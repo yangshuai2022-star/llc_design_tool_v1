@@ -8,6 +8,38 @@ Integrated engineering design and control-analysis toolkit for:
 
 V7 reorganizes the GUI into separate **LLC** and **PFC** workspaces. The PFC workspace contains independent **TTPL** and **Vienna** sub-workspaces.
 
+## 开发时间线 / Development Timeline
+
+功能演进与缺陷修复同步记录，向所有使用者公开。
+Legend: 🚀 Feature · 🐛 Bugfix · 🎨 GUI/UX · 🧪 Test/CI/Build
+
+| 版本 / 日期 | 类型 | 内容 |
+| --- | --- | --- |
+| V4.1 | 🚀 | 可拖动 Bode 光标（功率级小信号页 + 完整数字环页），幅频/相频同步、对数频率插值 |
+| V4.2 | 🐛 | Bode 光标中文标注方块修复：移除强制 monospace，新增 Win/macOS/Linux CJK 字体解析器 |
+| V6 | 🚀 | LLC 与 PFC 拆分为独立顶层工作区；PFC Bode 默认仅开环、逐传递函数独立显隐；新增完整 AC 周期与开关周期波形 |
+| 2026-08-02 | 🚀 | Windows/macOS 启动脚本（中文文件名、venv 兜底） |
+| 2026-08-02 | 🧪 | PyInstaller 打包入口 + GitHub Actions 构建（macOS/Windows，tag 触发发布） |
+| 2026-08-02 | 🐛 | CI 修复：bash 续行符、Windows pwsh `ls -la` 兼容 |
+| 2026-08-03 | 🐛 | 修复 Windows 启动脚本：UTF-8/CRLF 解析损坏 + errorlevel 展开错误 |
+| V7 | 🚀 | 结构性重构：LLC/PFC/Vienna 三工作区；新增三相 Vienna PFC 拓扑（ABC 电流环 + 中点平衡 + 三电平调制） |
+| V7.1 | 🎨 | LLC GUI 信息架构整理：可停靠参数面板（F4）、专注模式（F9）、运行日志（F8）、Ctrl+R 按页运行 |
+| V7.1.1 | 🎨 | “设计参数”统一为单一显隐切换；移除 dock 关闭按钮避免不一致 |
+| V7.1.2 | 🎨 | 信号链框图可读性：放大块/标签/箭头，正交路由，角色配色与文字层级 |
+| V7.1.3 | 🚀 | LLC 数字控制信号链改为可缩放/平移矢量画布；全屏检视；选中高亮 + 联动参数/Bode |
+| V7.1.4 | 🚀 | LLC 变压器规格书驱动设计：TDK PQ35/35 预设、整数匝数搜索、Litz 选型、iGSE/分层铜损、一键回填主工程 |
+| V7.1.5 | 🚀 | TTPL 电流环 PI 一键自动整定 + indu_comp 包络校验；Vienna 保守外环 PI（~53° 相位裕度） |
+| V7.1.5 | 🐛 | 修复 TTPL 开关电流重构：跨 PWM 周期连续积分，不再每周期重置为三角纹波模板 |
+| V7.1.5 | 🐛 | 修复 TTPL/Vienna 采样链延迟双重计数：ADC/SOC 延迟归采样块，计算/PWM 延迟归固件块 |
+| V7.2 | 🚀 | C99 Float32 控制代码生成器（LLC / TTPL / Vienna），Init/Reset/ControlStep API + ISR 集成模板 + 稳定性报告 |
+| V7.2 | 🐛 | 修复 Vienna GUI `self.fsw` spinbox 与 Figure 属性冲突（重命名为 `self.fsw_fig`） |
+| V7.2.1 | 🎨 | PFC UI 密度优化：TTPL 紧凑控制头、可收起框图/参数、Bode 复选框默认折叠；Windows 11 样式统一 |
+| V7.3 | 🚀 | PFC 电感设计页（Magnetics High Flux 254，DC-bias 跌落 + 铜损 + 一键回填）；Vienna UI 与 TTPL/LLC 统一 |
+| V7.3 | 🐛 | 修复 LLC/PFC 共享模拟采样示意图在窄面板下被裁剪（高度自适应） |
+| V7.4 | 🚀 | 工具栏“检查更新”：后台线程查 GitHub Releases API；启动 2.5s 静默自检；联系邮箱/微信 |
+| 2026-08-17 | 🚀 | GUI 自动适配 Windows 11 深色/浅色主题（注册表检测 + Fusion 调色板 + 两套 token） |
+| 2026-08-17 | 🐛 | 修复 Win11 深色主题下整屏不可见：浅色背景 + 跟随系统的浅色文字 → 统一从主题模块取色 |
+
 ## Install
 
 Core/CLI:
