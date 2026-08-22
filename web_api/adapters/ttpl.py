@@ -9,6 +9,7 @@ reimplemented here.
 
 from __future__ import annotations
 
+import math
 import time
 from collections.abc import Mapping
 from dataclasses import asdict, fields, replace
@@ -58,9 +59,37 @@ from web_api.serialization import jsonable
 
 ALGORITHM_VERSION = "ttpl-control-lab-v7"
 
+# Resource ceilings for the anonymous 1-vCPU/2-GB service boundary.  These
+# retain the GUI/CLI ranges while stopping accidental multi-gigabyte arrays.
+MAX_FREQUENCY_POINTS = 20_000
+MAX_WAVEFORM_LINE_CYCLES = 20
+MAX_WAVEFORM_INTEGRATION_RATE_HZ = 2.0e6
+MAX_LINE_CYCLE_SAMPLES = 5_000_000
+MAX_SWITCHING_CYCLES = 50
+MAX_SWITCHING_SAMPLES_PER_CYCLE = 10_000
+MAX_SWITCHING_SAMPLES = 400_000
+MAX_INDUCTOR_CURVE_POINTS = 5_000
+
 
 class TTPLAdapterError(ValueError):
     """Invalid TTPL request shape or operation option."""
+
+
+class TTPLAdapterEnvelope(dict[str, Any]):
+    """Public JSON payload plus non-public paths for ArtifactStore handoff.
+
+    The mapping behavior preserves existing callers that index adapter results,
+    while ``artifact_paths`` remains outside the JobResultPayload contract.
+    """
+
+    def __init__(
+        self,
+        payload: Mapping[str, Any],
+        artifact_paths: Mapping[str, Path] | None = None,
+    ) -> None:
+        super().__init__(payload)
+        self.payload = dict(payload)
+        self.artifact_paths = dict(artifact_paths or {})
 
 
 def _mapping(value: Any, path: str) -> dict[str, Any]:
@@ -299,6 +328,106 @@ def build_inductor_request(
     return request
 
 
+def _bounded_int(value: Any, name: str, maximum: int) -> int:
+    if isinstance(value, bool):
+        raise TTPLAdapterError(f"{name} must be an integer")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise TTPLAdapterError(f"{name} must be an integer") from exc
+    if not math.isfinite(numeric) or numeric != math.floor(numeric):
+        raise TTPLAdapterError(f"{name} must be an integer")
+    integer = int(numeric)
+    if integer > maximum:
+        raise TTPLAdapterError(f"{name} exceeds resource limit {maximum}")
+    return integer
+
+
+def _bounded_real(value: Any, name: str, maximum: float) -> float:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise TTPLAdapterError(f"{name} must be finite") from exc
+    if not math.isfinite(numeric):
+        raise TTPLAdapterError(f"{name} must be finite")
+    if numeric > maximum:
+        raise TTPLAdapterError(f"{name} exceeds resource limit {maximum:g}")
+    return numeric
+
+
+def _enforce_resource_bounds(config: PFCControlLabConfig) -> None:
+    """Reject allocation multipliers before entering numerical algorithms."""
+
+    _bounded_int(config.frequency_points, "frequency_points", MAX_FREQUENCY_POINTS)
+    line_cycles = _bounded_int(
+        config.waveform_line_cycles, "waveform_line_cycles", MAX_WAVEFORM_LINE_CYCLES
+    )
+    integration_rate = _bounded_real(
+        config.waveform_integration_rate_hz,
+        "waveform_integration_rate_hz",
+        MAX_WAVEFORM_INTEGRATION_RATE_HZ,
+    )
+    line_frequency = _bounded_real(
+        config.power_stage.line_frequency_hz, "line_frequency_hz", math.inf
+    )
+    switching_cycles = _bounded_int(
+        config.switching_cycles, "switching_cycles", MAX_SWITCHING_CYCLES
+    )
+    samples_per_cycle = _bounded_int(
+        config.switching_samples_per_cycle,
+        "switching_samples_per_cycle",
+        MAX_SWITCHING_SAMPLES_PER_CYCLE,
+    )
+    line_samples = math.ceil(
+        line_cycles * integration_rate / line_frequency
+    ) + 1
+    if line_samples > MAX_LINE_CYCLE_SAMPLES:
+        raise TTPLAdapterError(
+            f"line-cycle sample count {line_samples} exceeds resource limit {MAX_LINE_CYCLE_SAMPLES}"
+        )
+    switching_samples = switching_cycles * samples_per_cycle
+    if switching_samples > MAX_SWITCHING_SAMPLES:
+        raise TTPLAdapterError(
+            f"switching sample count {switching_samples} exceeds resource limit {MAX_SWITCHING_SAMPLES}"
+        )
+
+
+def _enforce_switching_options(
+    config: PFCControlLabConfig, options: Mapping[str, Any]
+) -> None:
+    cycles = options.get("cycles", 1 if "samples" in options else config.switching_cycles)
+    samples_per_cycle = options.get(
+        "samples_per_cycle", options.get("samples", config.switching_samples_per_cycle)
+    )
+    cycle_count = _bounded_int(cycles, "switching cycles", MAX_SWITCHING_CYCLES)
+    sample_count = _bounded_int(
+        samples_per_cycle,
+        "switching samples per cycle",
+        MAX_SWITCHING_SAMPLES_PER_CYCLE,
+    )
+    total = cycle_count * sample_count
+    if total > MAX_SWITCHING_SAMPLES:
+        raise TTPLAdapterError(
+            f"switching sample count {total} exceeds resource limit {MAX_SWITCHING_SAMPLES}"
+        )
+
+
+def _enforce_inductor_bounds(request: PFCInductorDesignRequest) -> None:
+    _bounded_int(request.curve_points, "inductor curve points", MAX_INDUCTOR_CURVE_POINTS)
+
+
+def _job_output(job_dir: str | Path | None, operation: str) -> tuple[Path, Path]:
+    if job_dir is None:
+        raise TTPLAdapterError(f"{operation} requires an explicit job_dir output root")
+    root = Path(job_dir).expanduser()
+    root.mkdir(parents=True, exist_ok=True)
+    root = root.resolve()
+    output = (root / ("ttpl_control_lab" if operation == "full_export" else "generated_ttpl")).resolve()
+    if root not in output.parents:
+        raise TTPLAdapterError("resolved output escaped job_dir")
+    return root, output
+
+
 def _margins(value: Any) -> dict[str, Any]:
     return {
         "gain_crossovers_hz": value.gain_crossovers_hz,
@@ -383,7 +512,8 @@ def _result(
     feasibility: bool | None = None,
     warnings: list[str] | tuple[str, ...] = (),
     evidence: Any = None,
-) -> dict[str, Any]:
+    artifact_paths: Mapping[str, Path] | None = None,
+) -> TTPLAdapterEnvelope:
     payload = {
         "toolkit_version": TOOLKIT_VERSION,
         "algorithm_version": ALGORITHM_VERSION,
@@ -401,12 +531,9 @@ def _result(
         "feasibility": feasibility,
         "warnings": list(warnings),
         "evidence": [] if evidence is None else evidence,
-        # Files are deliberately returned under parameters.artifact_paths for
-        # the caller's ArtifactStore to register; this adapter does not invent
-        # ArtifactRef identifiers or duplicate file contents in the payload.
         "artifacts": [],
     }
-    return jsonable(payload)
+    return TTPLAdapterEnvelope(jsonable(payload), artifact_paths=artifact_paths)
 
 
 def _effective_analysis(
@@ -462,7 +589,8 @@ def run_ttpl_operation(
     options: Mapping[str, Any] | None = None,
     *,
     export_options: Mapping[str, Any] | None = None,
-) -> dict[str, Any]:
+    job_dir: str | Path | None = None,
+) -> TTPLAdapterEnvelope:
     """Execute one TTPL workspace operation and return a JSON-safe payload."""
 
     normalized = str(operation).strip().lower()
@@ -483,13 +611,24 @@ def run_ttpl_operation(
         merged_options = _mapping(export_options, "export_options")
     started = time.perf_counter()
 
+    job_root: Path | None = None
+    job_output: Path | None = None
+    if normalized in {"full_export", "codegen"}:
+        job_root, job_output = _job_output(job_dir, normalized)
+
     if normalized == "inductor_design":
-        config_data, inductor_data = _split_inductor_config(
-            config if isinstance(config, Mapping) else None
-        )
+        if isinstance(config, PFCControlLabConfig):
+            pfc_config = build_ttpl_config(config)
+            inductor_data: dict[str, Any] = {}
+        else:
+            config_data, inductor_data = _split_inductor_config(
+                config if isinstance(config, Mapping) else None
+            )
+            pfc_config = build_ttpl_config(config_data)
         _reject_unknown(merged_options, set(), "options")
-        pfc_config = build_ttpl_config(config_data)
+        _enforce_resource_bounds(pfc_config)
         request = build_inductor_request(inductor_data, config=pfc_config)
+        _enforce_inductor_bounds(request)
         design = design_pfc_inductor(request)
         result_metrics = {
             key: value
@@ -541,6 +680,7 @@ def run_ttpl_operation(
         )
 
     pfc_config = build_ttpl_config(config)
+    _enforce_resource_bounds(pfc_config)
 
     if normalized == "control_analysis":
         effective, tune, autotune, apply = _effective_analysis(pfc_config, merged_options)
@@ -633,6 +773,7 @@ def run_ttpl_operation(
     if normalized == "switching":
         allowed = {"line_angle_deg", "samples", "cycles", "samples_per_cycle"}
         _reject_unknown(merged_options, allowed, "options")
+        _enforce_switching_options(pfc_config, merged_options)
         line_cycle = simulate_pfc_line_cycle(pfc_config)
         waveform = build_pfc_switching_waveforms(
             pfc_config,
@@ -659,12 +800,8 @@ def run_ttpl_operation(
         )
 
     if normalized == "full_export":
-        _reject_unknown(merged_options, {"directory", "output_dir", "line_angle_deg"}, "options")
-        if "directory" in merged_options and "output_dir" in merged_options:
-            raise TTPLAdapterError("options cannot contain both directory and output_dir")
-        directory = merged_options.get(
-            "directory", merged_options.get("output_dir", "output/ttpl_control_lab")
-        )
+        _reject_unknown(merged_options, {"line_angle_deg"}, "options")
+        assert job_output is not None and job_root is not None
         line_cycle = simulate_pfc_line_cycle(pfc_config)
         switching = build_pfc_switching_waveforms(
             pfc_config,
@@ -672,7 +809,7 @@ def run_ttpl_operation(
             line_angle_deg=merged_options.get("line_angle_deg"),
         )
         analysis = build_pfc_control_lab_analysis(pfc_config)
-        paths = export_pfc_control_lab(analysis, line_cycle, switching, directory)
+        paths = export_pfc_control_lab(analysis, line_cycle, switching, job_output)
         metrics, series, tables = _analysis_payload(analysis)
         line_metrics, line_series, units, warnings = _waveform_payload(line_cycle)
         tables["line_cycle_metrics"] = line_metrics
@@ -682,15 +819,12 @@ def run_ttpl_operation(
         }
         series["line_cycle"] = line_series
         series["switching"] = {"time_s": switching.time_s, "signals": switching.signals}
-        path_map = {name: str(Path(path).resolve()) for name, path in paths.items()}
+        path_map = {name: Path(path).resolve() for name, path in paths.items()}
         return _result(
             normalized,
             pfc_config,
             started,
-            parameters={
-                "directory": str(Path(directory).resolve()),
-                "artifact_paths": path_map,
-            },
+            parameters={"job_root_provided": True},
             metrics=metrics,
             tables=tables,
             series=series,
@@ -702,20 +836,18 @@ def run_ttpl_operation(
                 "pfc_design.control.analysis.build_pfc_control_lab_analysis",
                 "pfc_design.control.waveforms.simulate_pfc_line_cycle",
             ],
+            artifact_paths=path_map,
         )
 
     # codegen
     allowed = {
-        "directory",
-        "output_dir",
         "duty_feedforward_enabled",
         "require_stable",
         "autotune",
         "apply",
     }
     _reject_unknown(merged_options, allowed, "options")
-    if "directory" in merged_options and "output_dir" in merged_options:
-        raise TTPLAdapterError("options cannot contain both directory and output_dir")
+    assert job_output is not None and job_root is not None
     autotune = bool(merged_options.get("autotune", False))
     apply = bool(merged_options.get("apply", False))
     if apply and not autotune:
@@ -727,14 +859,13 @@ def run_ttpl_operation(
         if apply:
             effective = replace(pfc_config, current_controller=tune.controller)
     analysis = build_pfc_control_lab_analysis(effective)
-    directory = merged_options.get("directory", merged_options.get("output_dir", "output/generated_ttpl"))
     generated = generate_ttpl_control_code(
         analysis,
-        directory,
+        job_output,
         duty_feedforward_enabled=bool(merged_options.get("duty_feedforward_enabled", True)),
         require_stable=bool(merged_options.get("require_stable", True)),
     )
-    path_map = {name: str(Path(path).resolve()) for name, path in generated.files.items()}
+    path_map = {name: Path(path).resolve() for name, path in generated.files.items()}
     warnings = list(generated.validation.warnings)
     if tune is not None:
         warnings.append(tune.message)
@@ -743,8 +874,7 @@ def run_ttpl_operation(
         effective,
         started,
         parameters={
-            "directory": str(Path(directory).resolve()),
-            "artifact_paths": path_map,
+            "job_root_provided": True,
             "autotune": autotune,
             "apply": apply,
             "applied": apply,
@@ -756,6 +886,7 @@ def run_ttpl_operation(
         warnings=warnings,
         feasibility=generated.validation.passed,
         evidence=["power_codegen.generator.generate_ttpl_control_code"],
+        artifact_paths=path_map,
     )
 
 
@@ -763,10 +894,12 @@ def execute_ttpl_operation(
     operation: str,
     config: Mapping[str, Any] | PFCControlLabConfig | None = None,
     export_options: Mapping[str, Any] | None = None,
-) -> dict[str, Any]:
+    *,
+    job_dir: str | Path | None = None,
+) -> TTPLAdapterEnvelope:
     """Compatibility entry point for job runners using ``export_options``."""
 
-    return run_ttpl_operation(operation, config, export_options=export_options)
+    return run_ttpl_operation(operation, config, export_options=export_options, job_dir=job_dir)
 
 
 class TTPLAdapter:
@@ -781,13 +914,25 @@ class TTPLAdapter:
         options: Mapping[str, Any] | None = None,
         *,
         export_options: Mapping[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        return run_ttpl_operation(operation, config, options, export_options=export_options)
+        job_dir: str | Path | None = None,
+    ) -> TTPLAdapterEnvelope:
+        return run_ttpl_operation(
+            operation, config, options, export_options=export_options, job_dir=job_dir
+        )
 
 
 __all__ = [
     "ALGORITHM_VERSION",
+    "MAX_FREQUENCY_POINTS",
+    "MAX_INDUCTOR_CURVE_POINTS",
+    "MAX_LINE_CYCLE_SAMPLES",
+    "MAX_SWITCHING_CYCLES",
+    "MAX_SWITCHING_SAMPLES",
+    "MAX_SWITCHING_SAMPLES_PER_CYCLE",
+    "MAX_WAVEFORM_INTEGRATION_RATE_HZ",
+    "MAX_WAVEFORM_LINE_CYCLES",
     "TTPLAdapter",
+    "TTPLAdapterEnvelope",
     "TTPLAdapterError",
     "build_inductor_request",
     "build_ttpl_config",
