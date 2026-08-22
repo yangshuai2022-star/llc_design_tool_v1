@@ -40,6 +40,10 @@ class JobExpiredError(RuntimeError):
     """Internal marker used to construct a stable expired error."""
 
 
+class JobResultIntegrityError(RuntimeError):
+    """Raised when an adapter result does not identify the submitted job."""
+
+
 class _FileCancellationEvent:
     """Picklable cooperative cancellation signal for a spawn worker."""
 
@@ -70,9 +74,11 @@ class AdapterOutput:
     artifacts: tuple[InternalArtifact, ...] = ()
 
 
-OperationAdapter = Callable[[str, dict[str, Any], Path], AdapterOutput | JobResultPayload | Mapping[str, Any]]
+OperationAdapter = Callable[
+    [str, dict[str, Any], dict[str, Any], Path], AdapterOutput | JobResultPayload | Mapping[str, Any]
+]
 OperationAdapterWithCancel = Callable[
-    [str, dict[str, Any], Path, Any], AdapterOutput | JobResultPayload | Mapping[str, Any]
+    [str, dict[str, Any], dict[str, Any], Path, Any], AdapterOutput | JobResultPayload | Mapping[str, Any]
 ]
 
 
@@ -81,7 +87,7 @@ class _AdapterBridge:
     adapter: OperationAdapter
 
     def __call__(self, request: JobRequest, job_dir: Path, _cancel_event: Any) -> Any:
-        return self.adapter(request.operation, request.config, job_dir)
+        return self.adapter(request.operation, request.config, request.export_options, job_dir)
 
 
 @dataclass(frozen=True)
@@ -89,17 +95,17 @@ class _CancellableAdapterBridge:
     adapter: OperationAdapterWithCancel
 
     def __call__(self, request: JobRequest, job_dir: Path, cancel_event: Any) -> Any:
-        return self.adapter(request.operation, request.config, job_dir, cancel_event)
+        return self.adapter(request.operation, request.config, request.export_options, job_dir, cancel_event)
 
 
 def bridge_adapter(adapter: OperationAdapter) -> _AdapterBridge:
-    """Bridge a top-level ``(operation, config, job_dir)`` adapter."""
+    """Bridge ``(operation, config, export_options, job_dir)`` adapters."""
 
     return _AdapterBridge(adapter)
 
 
 def bridge_adapter_with_cancel(adapter: OperationAdapterWithCancel) -> _CancellableAdapterBridge:
-    """Bridge a top-level adapter that also accepts the cancellation signal."""
+    """Bridge adapters with ``(operation, config, export_options, job_dir, cancel_event)``."""
 
     return _CancellableAdapterBridge(adapter)
 
@@ -123,16 +129,19 @@ def _invoke_dispatch(
         return result
     if isinstance(result, JobResultPayload):
         return AdapterOutput(result=result)
-    if isinstance(result, Mapping) and "result" in result and "artifacts" in result:
+    if isinstance(result, Mapping) and ("result" in result or "payload" in result):
+        manifest = result.get("artifact_manifest", result.get("artifacts"))
+        if manifest is None:
+            return AdapterOutput(result=result.get("result", result.get("payload")))
         internal_artifacts: list[InternalArtifact] = []
-        for item in result["artifacts"]:
+        for item in manifest:
             if isinstance(item, InternalArtifact):
                 internal_artifacts.append(item)
             elif isinstance(item, Mapping):
                 internal_artifacts.append(InternalArtifact(**item))
             else:
                 internal_artifacts.append(InternalArtifact(path=item))
-        return AdapterOutput(result=result["result"], artifacts=tuple(internal_artifacts))
+        return AdapterOutput(result=result.get("result", result.get("payload")), artifacts=tuple(internal_artifacts))
     return AdapterOutput(result=JobResultPayload.model_validate(result))
 
 
@@ -320,7 +329,7 @@ class JobManager:
     def job_dir(self, job_id: str) -> Path:
         with self._lock:
             record = self._get_record_locked(job_id)
-            if record.job_dir is None:
+            if record.job_dir is None or record.status in (JobStatus.CANCELLED, JobStatus.EXPIRED):
                 raise JobNotFoundError(job_id)
             return record.job_dir
 
@@ -359,6 +368,19 @@ class JobManager:
                 self._start_locked(record)
                 return
 
+    def _artifact_relative_path(self, record: _JobRecord, path: str | Path) -> Path:
+        if record.job_dir is None:
+            raise ValueError("job artifact directory is unavailable")
+        raw = Path(path)
+        if not raw.is_absolute():
+            return raw
+        root = record.job_dir.resolve()
+        resolved = raw.resolve(strict=False)
+        try:
+            return resolved.relative_to(root)
+        except ValueError as exc:
+            raise ValueError("artifact path escapes job directory") from exc
+
     def _succeed_locked(self, record: _JobRecord, result: AdapterOutput | JobResultPayload | Mapping[str, Any]) -> None:
         if record.status in (JobStatus.CANCELLED, JobStatus.EXPIRED, JobStatus.SUCCEEDED, JobStatus.FAILED):
             self._release_running_locked(record)
@@ -370,13 +392,17 @@ class JobManager:
         else:
             output = AdapterOutput(result=JobResultPayload.model_validate(result))
         payload = output.result if isinstance(output.result, JobResultPayload) else JobResultPayload.model_validate(output.result)
+        if payload.workspace is not record.request.workspace or payload.operation != record.request.operation:
+            raise JobResultIntegrityError("adapter result identity does not match submitted job")
+        if payload.artifacts:
+            raise JobResultIntegrityError("direct public artifacts are not accepted")
         registry = record.artifact_registry
         if registry is None and output.artifacts:
             raise ValueError("job artifact registry is unavailable")
         if registry is not None:
             for artifact in output.artifacts:
                 registry.register(
-                    artifact.path,
+                    self._artifact_relative_path(record, artifact.path),
                     original_name=artifact.original_name,
                     media_type=artifact.media_type,
                 )
@@ -401,6 +427,10 @@ class JobManager:
         record.updated_at = now
         record.expires_at = now + self.SUCCESS_FAILURE_TTL
         record.error = map_exception(exc, "execution")
+        record.result = None
+        record.artifacts = []
+        record.warnings = []
+        record.artifact_registry = None
         self._release_running_locked(record)
 
     def start(self, job_id: str) -> JobView:
@@ -494,6 +524,10 @@ class JobManager:
             details={},
             retryable=False,
         )
+        record.result = None
+        record.artifacts = []
+        record.warnings = []
+        record.artifact_registry = None
         if was_queued:
             self._pump_locked()
 
@@ -604,6 +638,7 @@ __all__ = [
     "JobExpiredError",
     "JobManager",
     "JobNotFoundError",
+    "JobResultIntegrityError",
     "bridge_adapter",
     "bridge_adapter_with_cancel",
 ]
