@@ -17,6 +17,12 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=7", "pytest-cov", "mypy", "ruff"]
 gui = ["PySide6>=6.7", "pyqtgraph>=0.13.7"]
+web = [
+    "fastapi>=0.116,<1",
+    "uvicorn[standard]>=0.35,<1",
+    "python-multipart>=0.0.20,<1",
+    "httpx>=0.28,<1",
+]
 
 [project.scripts]
 pfc-design = "pfc_design.__main__:cli"
@@ -33,7 +39,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["pfc_design*", "llc_design*", "power_codegen*"]
+include = ["pfc_design*", "llc_design*", "power_codegen*", "web_api*"]
 exclude = ["*.output*", "*.__pycache__*"]
 
 [tool.setuptools.package-data]
