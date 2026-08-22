@@ -63,6 +63,7 @@ class ArtifactRegistry:
             or _has_control_characters(name)
             or "/" in name
             or "\\" in name
+            or name in {".", ".."}
             or name == "manifest.json"
         ):
             raise ArtifactError("artifact filename is unsafe")

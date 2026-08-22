@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+import pickle
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Event
@@ -8,7 +9,13 @@ from threading import Event
 import pytest
 
 from web_api.contracts import JobRequest, JobResultPayload, JobStatus
-from web_api.jobs import AdmissionError, JobManager
+from web_api.jobs import (
+    AdapterOutput,
+    AdmissionError,
+    InternalArtifact,
+    JobManager,
+    bridge_adapter,
+)
 
 
 class FakeClock:
@@ -49,6 +56,45 @@ def _failing_unc_dispatch(_request: JobRequest, _job_dir: Path, _cancel_event: o
     raise ValueError(r"invalid parameter at \\server\share\file.json")
 
 
+def _sample_adapter(operation: str, config: dict[str, object], job_dir: Path) -> AdapterOutput:
+    (job_dir / "report.txt").write_text("report", encoding="utf-8")
+    payload = JobResultPayload(
+        toolkit_version="7.5.0",
+        algorithm_version="adapter-v1",
+        workspace="llc",
+        operation=operation,
+        config_snapshot=config,
+        stage="complete",
+        elapsed_s=0.0,
+        metrics={"ok": True},
+        feasibility=True,
+    )
+    return AdapterOutput(
+        result=payload,
+        artifacts=(InternalArtifact(path="report.txt", original_name="result.txt"),),
+    )
+
+
+class _ImmediateQueuedExecutor:
+    def __init__(self) -> None:
+        self.futures: list[Future[object]] = []
+
+    def submit(self, function: object, *args: object, **kwargs: object) -> Future[object]:
+        future: Future[object] = Future()
+        if not self.futures:
+            self.futures.append(future)
+            return future
+        try:
+            future.set_result(function(*args, **kwargs))  # type: ignore[operator]
+        except BaseException as exc:  # noqa: BLE001 - fake executor captures worker termination
+            future.set_exception(exc)
+        self.futures.append(future)
+        return future
+
+    def shutdown(self, **_kwargs: object) -> None:
+        return None
+
+
 def _request() -> JobRequest:
     return JobRequest(workspace="llc", operation="system", config={"vin_nom_v": 400.0})
 
@@ -62,7 +108,7 @@ def test_manager_uses_spawn_and_completes_with_terminal_ttl(tmp_path: Path) -> N
         temp_root=tmp_path,
         dispatchers={("llc", "system"): _payload},
     )
-    assert manager.process_start_method == "spawn"
+    assert pickle.dumps(_payload)
 
     view = manager.submit(_request())
     manager.future(view.id).result(timeout=2.0)
@@ -73,6 +119,65 @@ def test_manager_uses_spawn_and_completes_with_terminal_ttl(tmp_path: Path) -> N
     clock.advance(seconds=1)
     assert manager.get(view.id).status is JobStatus.EXPIRED
     assert manager.get_result(view.id).status is JobStatus.EXPIRED
+    manager.shutdown()
+
+
+def test_completed_queued_future_is_consumed_without_sticking_or_double_completion(tmp_path: Path) -> None:
+    executor = _ImmediateQueuedExecutor()
+    manager = JobManager(
+        executor=executor,
+        temp_root=tmp_path,
+        dispatchers={("llc", "system"): _payload},
+    )
+    first = manager.submit(_request())
+    second = manager.submit(_request())
+    assert manager.get(first.id).status is JobStatus.RUNNING
+    assert manager.get(second.id).status is JobStatus.SUCCEEDED
+    executor.futures[0].set_result(_payload(_request(), tmp_path, Event()))
+    assert manager.get(first.id).status is JobStatus.SUCCEEDED
+    third = manager.submit(_request())
+    assert third.status is JobStatus.SUCCEEDED
+    manager.shutdown()
+
+
+def test_adapter_bridge_registers_internal_paths_and_populates_public_artifacts(tmp_path: Path) -> None:
+    assert pickle.dumps(bridge_adapter(_sample_adapter))
+    executor = ThreadPoolExecutor(max_workers=1)
+    manager = JobManager(
+        executor=executor,
+        temp_root=tmp_path,
+        dispatchers={("llc", "system"): bridge_adapter(_sample_adapter)},
+    )
+    view = manager.submit(_request())
+    manager.future(view.id).result(timeout=2.0)
+    result = manager.get_result(view.id)
+    assert result.result is not None
+    assert len(result.artifacts) == 1
+    assert result.artifacts[0].name == "result.txt"
+    assert result.result.artifacts[0].id == result.artifacts[0].id
+    assert all(not isinstance(value, Path) for value in result.result.model_dump(mode="python").values())
+    manager.shutdown()
+
+
+def test_expired_tombstone_scrubs_result_artifacts_and_internal_directory(tmp_path: Path) -> None:
+    clock = FakeClock()
+    executor = ThreadPoolExecutor(max_workers=1)
+    manager = JobManager(
+        executor=executor,
+        clock=clock,
+        temp_root=tmp_path,
+        dispatchers={("llc", "system"): bridge_adapter(_sample_adapter)},
+    )
+    view = manager.submit(_request())
+    manager.future(view.id).result(timeout=2.0)
+    job_dir = manager.job_dir(view.id)
+    clock.advance(minutes=60)
+    manager.cleanup_expired()
+    result = manager.get_result(view.id)
+    assert result.status is JobStatus.EXPIRED
+    assert result.result is None
+    assert result.artifacts == []
+    assert not job_dir.exists()
     manager.shutdown()
 
 

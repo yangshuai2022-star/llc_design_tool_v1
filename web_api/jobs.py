@@ -53,7 +53,58 @@ class _FileCancellationEvent:
         self.path.touch(exist_ok=True)
 
 
-Dispatcher = Callable[[JobRequest, Path, Any], JobResultPayload | Mapping[str, Any]]
+@dataclass(frozen=True)
+class InternalArtifact:
+    """Adapter-owned path manifest, kept separate from public API models."""
+
+    path: str | Path
+    original_name: str | None = None
+    media_type: str | None = None
+
+
+@dataclass(frozen=True)
+class AdapterOutput:
+    """Adapter result plus internal files to register in the parent process."""
+
+    result: JobResultPayload | Mapping[str, Any]
+    artifacts: tuple[InternalArtifact, ...] = ()
+
+
+OperationAdapter = Callable[[str, dict[str, Any], Path], AdapterOutput | JobResultPayload | Mapping[str, Any]]
+OperationAdapterWithCancel = Callable[
+    [str, dict[str, Any], Path, Any], AdapterOutput | JobResultPayload | Mapping[str, Any]
+]
+
+
+@dataclass(frozen=True)
+class _AdapterBridge:
+    adapter: OperationAdapter
+
+    def __call__(self, request: JobRequest, job_dir: Path, _cancel_event: Any) -> Any:
+        return self.adapter(request.operation, request.config, job_dir)
+
+
+@dataclass(frozen=True)
+class _CancellableAdapterBridge:
+    adapter: OperationAdapterWithCancel
+
+    def __call__(self, request: JobRequest, job_dir: Path, cancel_event: Any) -> Any:
+        return self.adapter(request.operation, request.config, job_dir, cancel_event)
+
+
+def bridge_adapter(adapter: OperationAdapter) -> _AdapterBridge:
+    """Bridge a top-level ``(operation, config, job_dir)`` adapter."""
+
+    return _AdapterBridge(adapter)
+
+
+def bridge_adapter_with_cancel(adapter: OperationAdapterWithCancel) -> _CancellableAdapterBridge:
+    """Bridge a top-level adapter that also accepts the cancellation signal."""
+
+    return _CancellableAdapterBridge(adapter)
+
+
+Dispatcher = Callable[[JobRequest, Path, Any], AdapterOutput | JobResultPayload | Mapping[str, Any]]
 
 
 def _missing_dispatch(request: JobRequest, _job_dir: Path, _cancel_event: Any) -> JobResultPayload:
@@ -65,12 +116,24 @@ def _invoke_dispatch(
     request_data: dict[str, Any],
     job_dir: str,
     cancel_event: Any,
-) -> JobResultPayload:
+) -> AdapterOutput:
     request = JobRequest(**request_data)
     result = dispatcher(request, Path(job_dir), cancel_event)
-    if isinstance(result, JobResultPayload):
+    if isinstance(result, AdapterOutput):
         return result
-    return JobResultPayload.model_validate(result)
+    if isinstance(result, JobResultPayload):
+        return AdapterOutput(result=result)
+    if isinstance(result, Mapping) and "result" in result and "artifacts" in result:
+        internal_artifacts: list[InternalArtifact] = []
+        for item in result["artifacts"]:
+            if isinstance(item, InternalArtifact):
+                internal_artifacts.append(item)
+            elif isinstance(item, Mapping):
+                internal_artifacts.append(InternalArtifact(**item))
+            else:
+                internal_artifacts.append(InternalArtifact(path=item))
+        return AdapterOutput(result=result["result"], artifacts=tuple(internal_artifacts))
+    return AdapterOutput(result=JobResultPayload.model_validate(result))
 
 
 @dataclass
@@ -92,6 +155,7 @@ class _JobRecord:
     cancel_event: Any = None
     future: Future[Any] | None = None
     counted_running: bool = False
+    completion_handled: bool = False
 
 
 class JobManager:
@@ -144,7 +208,7 @@ class JobManager:
     def process_start_method(self) -> str:
         if isinstance(self._executor, ProcessPoolExecutor):
             return self._executor._mp_context.get_start_method()  # type: ignore[attr-defined]
-        return "spawn"
+        return "thread"
 
     def _now(self) -> datetime:
         value = self._clock()
@@ -197,8 +261,8 @@ class JobManager:
             or _missing_dispatch
         )
 
-    def _start_locked(self, record: _JobRecord) -> None:
-        if record.status is not JobStatus.QUEUED or self._running_count >= self.max_running:
+    def _start_locked(self, record: _JobRecord, *, force: bool = False) -> None:
+        if record.status is not JobStatus.QUEUED or (not force and self._running_count >= self.max_running):
             return
         now = self._now()
         record.status = JobStatus.RUNNING
@@ -275,6 +339,11 @@ class JobManager:
         record.error = map_exception(JobExpiredError("job expired"), "expired")
         if record.job_dir is not None:
             shutil.rmtree(record.job_dir, ignore_errors=True)
+        record.result = None
+        record.artifacts = []
+        record.warnings = []
+        record.artifact_registry = None
+        record.job_dir = None
 
     def _release_running_locked(self, record: _JobRecord) -> None:
         if record.counted_running:
@@ -290,18 +359,34 @@ class JobManager:
                 self._start_locked(record)
                 return
 
-    def _succeed_locked(self, record: _JobRecord, result: JobResultPayload | Mapping[str, Any]) -> None:
+    def _succeed_locked(self, record: _JobRecord, result: AdapterOutput | JobResultPayload | Mapping[str, Any]) -> None:
         if record.status in (JobStatus.CANCELLED, JobStatus.EXPIRED, JobStatus.SUCCEEDED, JobStatus.FAILED):
             self._release_running_locked(record)
             return
-        payload = result if isinstance(result, JobResultPayload) else JobResultPayload.model_validate(result)
+        if isinstance(result, AdapterOutput):
+            output = result
+        elif isinstance(result, JobResultPayload):
+            output = AdapterOutput(result=result)
+        else:
+            output = AdapterOutput(result=JobResultPayload.model_validate(result))
+        payload = output.result if isinstance(output.result, JobResultPayload) else JobResultPayload.model_validate(output.result)
+        registry = record.artifact_registry
+        if registry is None and output.artifacts:
+            raise ValueError("job artifact registry is unavailable")
+        if registry is not None:
+            for artifact in output.artifacts:
+                registry.register(
+                    artifact.path,
+                    original_name=artifact.original_name,
+                    media_type=artifact.media_type,
+                )
         now = self._now()
         record.status = JobStatus.SUCCEEDED
         record.stage = payload.stage
         record.progress = 1.0
         record.updated_at = now
         record.expires_at = now + self.SUCCESS_FAILURE_TTL
-        record.artifacts = record.artifact_registry.artifacts if record.artifact_registry is not None else []
+        record.artifacts = registry.artifacts if registry is not None else []
         record.result = payload.model_copy(update={"artifacts": record.artifacts})
         record.warnings = list(payload.warnings)
         self._release_running_locked(record)
@@ -324,7 +409,7 @@ class JobManager:
             self._start_locked(record)
             return self._as_view_locked(record)
 
-    def succeed(self, job_id: str, result: JobResultPayload | Mapping[str, Any]) -> JobView:
+    def succeed(self, job_id: str, result: AdapterOutput | JobResultPayload | Mapping[str, Any]) -> JobView:
         with self._lock:
             record = self._get_record_locked(job_id)
             self._succeed_locked(record, result)
@@ -360,6 +445,14 @@ class JobManager:
             record = self._jobs.get(job_id)
             if record is None:
                 return
+            if record.completion_handled or not future.done():
+                return
+            record.completion_handled = True
+            if record.status is JobStatus.QUEUED:
+                if future.cancelled():
+                    self._cancel_locked(record, cancel_future=False)
+                    return
+                self._start_locked(record, force=True)
             if record.status in (JobStatus.CANCELLED, JobStatus.EXPIRED, JobStatus.SUCCEEDED, JobStatus.FAILED):
                 self._release_running_locked(record)
                 return
@@ -379,7 +472,7 @@ class JobManager:
                 except Exception as exc:  # noqa: BLE001 - result contract failures are API data
                     self._fail_locked(record, exc)
 
-    def _cancel_locked(self, record: _JobRecord) -> None:
+    def _cancel_locked(self, record: _JobRecord, *, cancel_future: bool = True) -> None:
         if record.status in (JobStatus.CANCELLED, JobStatus.EXPIRED):
             return
         if record.status in (JobStatus.SUCCEEDED, JobStatus.FAILED):
@@ -387,7 +480,7 @@ class JobManager:
         was_queued = not record.counted_running
         if record.counted_running:
             record.cancel_event.set()
-        elif record.future is not None:
+        elif record.future is not None and cancel_future:
             record.future.cancel()
         now = self._now()
         record.status = JobStatus.CANCELLED
@@ -504,4 +597,13 @@ class JobManager:
                 self._executor.shutdown(wait=True)
 
 
-__all__ = ["AdmissionError", "JobExpiredError", "JobManager", "JobNotFoundError"]
+__all__ = [
+    "AdapterOutput",
+    "AdmissionError",
+    "InternalArtifact",
+    "JobExpiredError",
+    "JobManager",
+    "JobNotFoundError",
+    "bridge_adapter",
+    "bridge_adapter_with_cancel",
+]

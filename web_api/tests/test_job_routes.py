@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -68,8 +69,16 @@ def test_pending_result_is_409_and_delete_is_idempotent(tmp_path: Path) -> None:
             json={"workspace": "llc", "operation": "system", "config": {}},
         ).json()["id"]
         assert client.get(f"/api/v1/jobs/{job_id}/result").status_code == 409
+        assert client.get(f"/api/v1/jobs/{job_id}/artifacts").status_code == 409
+        assert client.get(f"/api/v1/jobs/{job_id}/artifacts.zip").status_code == 409
+        assert client.get(f"/api/v1/jobs/{job_id}/artifacts/missing").status_code == 409
         assert client.delete(f"/api/v1/jobs/{job_id}").status_code == 200
         assert client.delete(f"/api/v1/jobs/{job_id}").status_code == 200
+        assert client.get(f"/api/v1/jobs/{job_id}").status_code == 410
+        assert client.get(f"/api/v1/jobs/{job_id}/result").status_code == 410
+        assert client.get(f"/api/v1/jobs/{job_id}/artifacts").status_code == 410
+        assert client.get(f"/api/v1/jobs/{job_id}/artifacts.zip").status_code == 410
+        assert client.get(f"/api/v1/jobs/{job_id}/artifacts/missing").status_code == 410
         release.set()
 
 
@@ -92,3 +101,30 @@ def test_artifact_routes_download_only_registered_files(tmp_path: Path) -> None:
         assert download.content == b"report"
         assert download.headers["cache-control"] == "no-store"
         assert download.headers["x-content-type-options"] == "nosniff"
+
+
+def test_expired_job_boundaries_are_410_and_result_is_scrubbed(tmp_path: Path) -> None:
+    now = [datetime(2026, 1, 1, tzinfo=UTC)]
+    manager = JobManager(
+        executor=ThreadPoolExecutor(max_workers=1),
+        clock=lambda: now[0],
+        temp_root=tmp_path,
+        dispatchers={("llc", "system"): _payload},
+    )
+    with TestClient(create_app(manager)) as client:
+        job_id = client.post(
+            "/api/v1/jobs",
+            json={"workspace": "llc", "operation": "system", "config": {}},
+        ).json()["id"]
+        manager.future(job_id).result(timeout=2.0)
+        job_dir = manager.job_dir(job_id)
+        (job_dir / "report.txt").write_text("report", encoding="utf-8")
+        artifact = manager.register_artifact(job_id, "report.txt")
+        now[0] += timedelta(minutes=60)
+        assert client.get(f"/api/v1/jobs/{job_id}").status_code == 410
+        result = client.get(f"/api/v1/jobs/{job_id}/result")
+        assert result.status_code == 410
+        assert "metrics" not in result.text
+        assert client.get(f"/api/v1/jobs/{job_id}/artifacts").status_code == 410
+        assert client.get(f"/api/v1/jobs/{job_id}/artifacts.zip").status_code == 410
+        assert client.get(f"/api/v1/jobs/{job_id}/artifacts/{artifact.id}").status_code == 410

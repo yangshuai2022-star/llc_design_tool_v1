@@ -90,11 +90,14 @@ def list_artifacts(job_id: str, request: Request) -> list[ArtifactRef] | JSONRes
     manager = _manager(request)
     try:
         view = manager.get(job_id)
-        registry = manager.artifacts(job_id)
     except JobNotFoundError as exc:
         raise _not_found() from exc
     if view.status in (JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.CANCELLED, JobStatus.EXPIRED):
         return _state_response(view, view.status)
+    try:
+        registry = manager.artifacts(job_id)
+    except JobNotFoundError as exc:
+        raise _not_found() from exc
     return registry.artifacts
 
 
@@ -118,12 +121,14 @@ def register_artifact(job_id: str, payload: ArtifactRegistrationRequest, request
         raise HTTPException(status_code=422, detail={"code": "invalid_artifact", "message": str(exc)}) from exc
 
 
-@router.get("/jobs/{job_id}/artifacts/{artifact_id}")
-def download_artifact(job_id: str, artifact_id: str, request: Request) -> FileResponse:
+@router.get("/jobs/{job_id}/artifacts/{artifact_id}", response_model=None)
+def download_artifact(job_id: str, artifact_id: str, request: Request) -> FileResponse | JSONResponse:
     manager = _manager(request)
     try:
         view = manager.get(job_id)
         _ensure_job_available(view)
+        if view.status in (JobStatus.QUEUED, JobStatus.RUNNING):
+            return _state_response(view, view.status)
         registry = manager.artifacts(job_id)
         item = registry.resolve_for_download(artifact_id)
         disposition = registry.content_disposition(artifact_id)
@@ -144,12 +149,14 @@ def download_artifact(job_id: str, artifact_id: str, request: Request) -> FileRe
     )
 
 
-@router.get("/jobs/{job_id}/artifacts.zip")
-def download_artifacts_zip(job_id: str, request: Request) -> StreamingResponse:
+@router.get("/jobs/{job_id}/artifacts.zip", response_model=None)
+def download_artifacts_zip(job_id: str, request: Request) -> StreamingResponse | JSONResponse:
     manager = _manager(request)
     try:
         view = manager.get(job_id)
         _ensure_job_available(view)
+        if view.status in (JobStatus.QUEUED, JobStatus.RUNNING):
+            return _state_response(view, view.status)
         archive = manager.artifacts(job_id).build_zip()
     except JobNotFoundError as exc:
         raise _not_found() from exc

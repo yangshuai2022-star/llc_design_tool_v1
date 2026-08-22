@@ -41,6 +41,10 @@ def test_registry_rejects_unsafe_or_duplicate_paths(tmp_path: Path) -> None:
         registry.register("other.txt", original_name="manifest.json")
     with pytest.raises(ArtifactError):
         registry.register("third.txt", media_type="text/plain\r\nX-Leak: yes")
+    with pytest.raises(ArtifactError):
+        registry.register("other.txt", original_name=".")
+    with pytest.raises(ArtifactError):
+        registry.register("other.txt", original_name="..")
 
 
 def test_registry_preserves_name_hashes_and_builds_deterministic_zip(tmp_path: Path) -> None:
