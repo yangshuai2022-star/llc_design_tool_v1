@@ -148,3 +148,11 @@ def test_map_exception_covers_engineering_failure_taxonomy_without_leaking_paths
         assert detail.details["exception_type"] == type(exception).__name__
         assert "/Users/secret" not in str(detail.details)
         assert "message" in detail.details
+
+
+def test_map_exception_redacts_windows_absolute_paths():
+    detail = map_exception(RuntimeError(r"failed to read C:\Users\secret\file.json"), stage="export")
+
+    assert detail.code == "internal_error"
+    assert "C:\\Users\\secret" not in str(detail.details)
+    assert "<path>" in detail.details["message"]

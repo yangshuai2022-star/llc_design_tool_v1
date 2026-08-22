@@ -38,6 +38,7 @@ def _exception_details(exc: BaseException) -> dict[str, Any]:
     # Preserve useful constraint/convergence context while preventing local
     # filesystem names from crossing the API boundary.
     safe_message = re.sub(r"(?:(?:[A-Za-z]:)?/)[^\s,;:]+", "<path>", message)
+    safe_message = re.sub(r"[A-Za-z]:\\[^\s,;:]+(?:\\[^\s,;:]+)*", "<path>", safe_message)
     details: dict[str, Any] = {
         "exception_type": type(exc).__name__,
         "message": safe_message,

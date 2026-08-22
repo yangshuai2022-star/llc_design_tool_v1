@@ -89,6 +89,33 @@ def test_request_operation_and_artifact_digest_are_strict():
         )
 
 
+def test_job_view_rejects_blank_operation_and_normalizes_valid_operation():
+    created = datetime(2026, 1, 1, tzinfo=UTC)
+    view = JobView(
+        id="job-1",
+        workspace="llc",
+        operation="  system  ",
+        status="queued",
+        stage="queued",
+        progress=0.0,
+        created_at=created,
+        updated_at=created,
+    )
+    assert view.operation == "system"
+
+    with pytest.raises(ValidationError):
+        JobView(
+            id="job-1",
+            workspace="llc",
+            operation="   ",
+            status="queued",
+            stage="queued",
+            progress=0.0,
+            created_at=created,
+            updated_at=created,
+        )
+
+
 def test_job_timestamps_require_timezone_and_monotonic_order():
     created = datetime(2026, 1, 1, tzinfo=UTC)
     with pytest.raises(ValidationError):

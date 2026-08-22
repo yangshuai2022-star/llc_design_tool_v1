@@ -67,6 +67,13 @@ JSONValue = TypeAliasType(
 JSONObject = dict[str, JSONValue]
 
 
+def _normalize_operation(value: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError("operation must not be blank")
+    return normalized
+
+
 class JobRequest(_ApiModel):
     """Input accepted when submitting an engineering job."""
 
@@ -78,9 +85,7 @@ class JobRequest(_ApiModel):
     @field_validator("operation")
     @classmethod
     def operation_must_not_be_blank(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("operation must not be blank")
-        return value
+        return _normalize_operation(value)
 
 
 class ArtifactRef(_ApiModel):
@@ -118,6 +123,11 @@ class JobView(_ApiModel):
     updated_at: datetime
     expires_at: datetime | None = None
     error: ErrorDetail | None = None
+
+    @field_validator("operation")
+    @classmethod
+    def operation_must_not_be_blank(cls, value: str) -> str:
+        return _normalize_operation(value)
 
     @field_validator("created_at", "updated_at", "expires_at")
     @classmethod
@@ -159,9 +169,7 @@ class JobResultPayload(_ApiModel):
     @field_validator("operation")
     @classmethod
     def operation_must_not_be_blank(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("operation must not be blank")
-        return value
+        return _normalize_operation(value)
 
 
 class JobResult(_ApiModel):
