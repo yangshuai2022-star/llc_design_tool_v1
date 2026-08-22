@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping, Sequence
 from dataclasses import fields, is_dataclass
+from datetime import date, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pandas as pd
+from pydantic import BaseModel
 
 
 def _finite_float(value: float) -> float | dict[str, str]:
@@ -27,12 +31,25 @@ def jsonable(value: Any) -> Any:
     engineering result is loss-aware instead of silently changing meaning.
     """
 
+    if isinstance(value, Enum):
+        return jsonable(value.value)
     if value is None or isinstance(value, (bool, int, str)):
         return value
     if isinstance(value, float):
         return _finite_float(value)
-    if isinstance(value, Enum):
-        return jsonable(value.value)
+    if isinstance(value, BaseModel):
+        return jsonable(value.model_dump(mode="python"))
+    if isinstance(value, pd.DataFrame):
+        return {
+            "columns": [str(column) for column in value.columns],
+            "records": jsonable(value.to_dict(orient="records")),
+        }
+    if isinstance(value, pd.Series):
+        return {"name": jsonable(value.name), "values": jsonable(value.tolist())}
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
     if isinstance(value, Path):
         return str(value)
     if isinstance(value, complex):
@@ -51,9 +68,14 @@ def jsonable(value: Any) -> Any:
         return jsonable(value.item())
     if is_dataclass(value) and not isinstance(value, type):
         return {field.name: jsonable(getattr(value, field.name)) for field in fields(value)}
-    if isinstance(value, dict):
-        return {str(key): jsonable(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, Mapping):
+        result: dict[str, Any] = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise TypeError(f"Unsupported JSON value: mapping key {type(key).__name__}")
+            result[key] = jsonable(item)
+        return result
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         return [jsonable(item) for item in value]
     raise TypeError(f"Unsupported JSON value: {type(value).__name__}")
 
