@@ -61,6 +61,17 @@ python -m pip install -e ".[dev]"
 pytest
 ```
 
+## Web edition (server-side Python)
+
+A FastAPI browser edition is included under `webapp/`. The browser only handles input and plotting; the original Python LLC engineering kernels execute on the server.
+
+```bash
+python -m pip install -e ".[web]"
+power-design-web
+```
+
+Open `http://127.0.0.1:8000`. See `WEB_DEPLOY.md` for GitHub Codespaces and container deployment.
+
 ## Start the GUI
 
 ```bash
