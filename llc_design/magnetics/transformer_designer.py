@@ -104,6 +104,12 @@ class TransformerSynthesisSettings:
     max_primary_turns_search: int = 500
     turn_ratio_tolerance: float = 0.04
     workpoint_scope: str = "all"  # all | normal | nominal
+    # When True, ignore the supplied ``core_input`` and pick a core from the
+    # library by the area-product (Ap) method (see ``area_product.py``).
+    auto_select_core: bool = False
+    area_product_material_key: str = "TDK_N87_REF"
+    area_product_margin: float = 1.15
+    area_product_delta_t_rise_c: float = 55.0
 
 
 @dataclass(frozen=True)
@@ -278,6 +284,16 @@ def synthesize_transformer(
     settings: TransformerSynthesisSettings | None = None,
 ) -> TransformerSynthesisResult:
     settings = settings or TransformerSynthesisSettings()
+    if settings.auto_select_core:
+        # Replace the supplied core with one recommended by the area-product
+        # method.  Imported lazily to avoid a circular import at module load.
+        from .area_product import recommend_core_by_area_product
+        core_input = recommend_core_by_area_product(
+            base_spec,
+            material_key=settings.area_product_material_key,
+            margin=settings.area_product_margin,
+            delta_t_rise_c=settings.area_product_delta_t_rise_c,
+        ).core
     core = core_input.to_core_spec()
 
     candidate_records: list[tuple[float, LLCDesignSpec, TankDesign, tuple[LLCOperatingPoint, ...], float]] = []

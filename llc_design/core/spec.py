@@ -126,6 +126,11 @@ class LLCDesignSpec:
     litz_current_density_target_a_per_mm2: float = 5.0
     litz_current_density_max_a_per_mm2: float = 6.0
     transformer_winding_layout: str = "P/2-S-P/2"
+    # Winding conductor model: "litz" uses the harmonic Litz field model in
+    # litz.py (default); "foil" selects the Dowell 1-D foil/solid-layer model
+    # in dowell.py.  The Litz path is the production default; the foil path is
+    # an analytical cross-check / alternative for foil or flat-wire windings.
+    transformer_winding_type: str = "litz"
     transformer_core_families: tuple[str, ...] = ("PQ", "EE", "EC", "EER", "ETD")
     resonant_inductor_core_families: tuple[str, ...] = ("PQ", "EE", "EC", "EER", "ETD")
     transformer_max_fill_factor: float = 0.60
@@ -211,5 +216,7 @@ class LLCDesignSpec:
             errors.append("Litz maximum harmonic must be >= 1")
         if self.magnetic_waveform_samples < 128:
             errors.append("magnetic waveform samples must be >= 128")
+        if self.transformer_winding_type not in ("litz", "foil"):
+            errors.append("transformer_winding_type must be 'litz' or 'foil'")
         if errors:
             raise ValueError("; ".join(errors))
