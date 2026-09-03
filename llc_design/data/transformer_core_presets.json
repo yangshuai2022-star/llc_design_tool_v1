@@ -1,0 +1,58 @@
+{
+  "metadata": {
+    "source": "TDK PQ35/35 B65881A core + B65882B coil former datasheet, October 2022",
+    "note": "Ae/Amin/le/Ve and material AL/mue/Pv values are datasheet values.  The usable winding width is an editable geometric helper taken from the coil-former drawing; verify against the exact bobbin and insulation build."
+  },
+  "presets": [
+    {
+      "preset_key": "TDK_PQ35_35_B65881A_N87",
+      "manufacturer": "TDK Electronics",
+      "part_number": "B65881A0000R087",
+      "shape": "PQ35/35",
+      "material_key": "TDK_N87_REF",
+      "material_grade": "N87",
+      "ae_mm2": 171.0,
+      "amin_mm2": 161.0,
+      "le_mm": 79.7,
+      "ve_mm3": 13650.0,
+      "sigma_l_over_a_per_mm": 0.465,
+      "al_nh": 4500.0,
+      "mu_e": 1670.0,
+      "winding_area_mm2": 158.0,
+      "mean_turn_length_mm": 76.0,
+      "usable_winding_width_mm": 24.6,
+      "ar_uohm": 16.5,
+      "core_mass_g": 74.0,
+      "thermal_resistance_k_per_w": 5.0,
+      "datasheet_loss_ref_w": 8.75,
+      "datasheet_loss_ref_frequency_hz": 100000.0,
+      "datasheet_loss_ref_b_t": 0.2,
+      "datasheet_loss_ref_temperature_c": 100.0
+    },
+    {
+      "preset_key": "TDK_PQ35_35_B65881A_N97",
+      "manufacturer": "TDK Electronics",
+      "part_number": "B65881A0000R097",
+      "shape": "PQ35/35",
+      "material_key": "TDK_N97_REF",
+      "material_grade": "N97",
+      "ae_mm2": 171.0,
+      "amin_mm2": 161.0,
+      "le_mm": 79.7,
+      "ve_mm3": 13650.0,
+      "sigma_l_over_a_per_mm": 0.465,
+      "al_nh": 4700.0,
+      "mu_e": 1750.0,
+      "winding_area_mm2": 158.0,
+      "mean_turn_length_mm": 76.0,
+      "usable_winding_width_mm": 24.6,
+      "ar_uohm": 16.5,
+      "core_mass_g": 74.0,
+      "thermal_resistance_k_per_w": 5.0,
+      "datasheet_loss_ref_w": 7.10,
+      "datasheet_loss_ref_frequency_hz": 100000.0,
+      "datasheet_loss_ref_b_t": 0.2,
+      "datasheet_loss_ref_temperature_c": 100.0
+    }
+  ]
+}

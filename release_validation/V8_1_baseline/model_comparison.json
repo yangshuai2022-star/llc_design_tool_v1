@@ -1,0 +1,240 @@
+{
+  "request": {
+    "vbus_v": 400.0,
+    "target_output_voltage_v": 53.0,
+    "load_fraction": 1.0,
+    "requested_output_power_w": 3000.0,
+    "frequency_hz": null,
+    "regulate_output": true
+  },
+  "reference_level": "switched_time_domain",
+  "warnings": [],
+  "comparison": [
+    {
+      "model": "fha",
+      "reference": false,
+      "converged": true,
+      "residual_norm": 0.0,
+      "switching_frequency_hz": 99688.7621985247,
+      "output_voltage_v": 53.0,
+      "output_power_w": 3000.0,
+      "normalized_gain": 1.00125,
+      "input_phase_deg": 29.883857231755112,
+      "resonant_current_rms_a": 9.680411491707167,
+      "resonant_current_peak_a": 13.68991303676255,
+      "magnetizing_current_rms_a": 4.841390750417572,
+      "secondary_current_rms_a": 62.87098497393921,
+      "resonant_capacitor_peak_v": 205.19453174374777,
+      "power_balance_error_percent": 0.5231843818591595,
+      "frequency_error_percent": 0.023222726055343996,
+      "gain_error_percent": 0.08396040714515947,
+      "resonant_rms_error_percent": -6.582530950794156,
+      "resonant_peak_error_percent": -6.706350436033186,
+      "magnetizing_rms_error_percent": -0.5678405741434749,
+      "secondary_rms_error_percent": -1.4969125042727849,
+      "resonant_cap_peak_error_percent": -6.626852667990215
+    },
+    {
+      "model": "harmonic_balance",
+      "reference": false,
+      "converged": true,
+      "residual_norm": 3.1074167913567105e-14,
+      "switching_frequency_hz": 99258.90654139625,
+      "output_voltage_v": 52.99999995554042,
+      "output_power_w": 2999.9999949668395,
+      "normalized_gain": 1.0012499991663828,
+      "input_phase_deg": 34.65886474692516,
+      "resonant_current_rms_a": 10.257446625250845,
+      "resonant_current_peak_a": 14.524716510729016,
+      "magnetizing_current_rms_a": 4.897149645072007,
+      "secondary_current_rms_a": 63.705006910931225,
+      "resonant_capacitor_peak_v": 218.2654111971968,
+      "power_balance_error_percent": -3.0837341632127193e-12,
+      "frequency_error_percent": -0.40807511719994505,
+      "gain_error_percent": 0.08396032381761054,
+      "resonant_rms_error_percent": -1.014052609320825,
+      "resonant_peak_error_percent": -1.017354271786733,
+      "magnetizing_rms_error_percent": 0.5773318749531248,
+      "secondary_rms_error_percent": -0.1902090087424668,
+      "resonant_cap_peak_error_percent": -0.6789887429905471
+    },
+    {
+      "model": "switched_time_domain",
+      "reference": true,
+      "converged": true,
+      "residual_norm": 3.2379699626971167e-12,
+      "switching_frequency_hz": 99665.61712528832,
+      "output_voltage_v": 52.95520275453417,
+      "output_power_w": 2994.930756967415,
+      "normalized_gain": 1.0004100516475156,
+      "input_phase_deg": 35.73176015783158,
+      "resonant_current_rms_a": 10.362528111961797,
+      "resonant_current_peak_a": 14.674003108192329,
+      "magnetizing_current_rms_a": 4.869039130169598,
+      "secondary_current_rms_a": 63.82641049364709,
+      "resonant_capacitor_peak_v": 219.75754015673397,
+      "power_balance_error_percent": -0.033843534930414365,
+      "frequency_error_percent": 0.0,
+      "gain_error_percent": 0.0,
+      "resonant_rms_error_percent": 0.0,
+      "resonant_peak_error_percent": 0.0,
+      "magnetizing_rms_error_percent": 0.0,
+      "secondary_rms_error_percent": 0.0,
+      "resonant_cap_peak_error_percent": 0.0
+    }
+  ],
+  "models": {
+    "fha": {
+      "metrics": {
+        "switching_frequency_hz": 99688.7621985247,
+        "output_voltage_v": 53.0,
+        "output_power_w": 3000.0,
+        "normalized_gain": 1.00125,
+        "input_phase_deg": 29.883857231755112,
+        "input_power_w": 3015.778079905598,
+        "resonant_current_rms_a": 9.680411491707167,
+        "resonant_current_peak_a": 13.68991303676255,
+        "magnetizing_current_rms_a": 4.841390750417572,
+        "magnetizing_current_peak_a": 6.846744362966046,
+        "primary_load_current_rms_a": 8.382797996525227,
+        "primary_load_current_peak_a": 11.855038745559183,
+        "secondary_current_rms_a": 62.87098497393921,
+        "secondary_current_peak_a": 88.91279059169388,
+        "rectifier_current_average_a": 56.60368326852726,
+        "resonant_capacitor_rms_v": 145.0971600618284,
+        "resonant_capacitor_peak_v": 205.19453174374777,
+        "output_capacitor_current_rms_a": 27.32014311867531,
+        "power_balance_error_w": 15.778079905598133,
+        "power_balance_error_percent": 0.5231843818591595
+      },
+      "convergence": {
+        "converged": true,
+        "residual_norm": 0.0,
+        "iterations": 1,
+        "method": "closed_form_fha",
+        "message": "FHA analytical solution"
+      },
+      "harmonic_orders": [
+        1
+      ],
+      "warnings": [
+        "FHA retains only the fundamental resonant-state components.",
+        "Deadtime is displayed in bridge/gate traces but is not included in the FHA phasor solution."
+      ],
+      "diagnostics": {
+        "rac_ohm": 43.01388209168166,
+        "normalized_frequency": 0.9968876219852469
+      }
+    },
+    "harmonic_balance": {
+      "metrics": {
+        "switching_frequency_hz": 99258.90654139625,
+        "output_voltage_v": 52.99999995554042,
+        "output_power_w": 2999.9999949668395,
+        "normalized_gain": 1.0012499991663828,
+        "input_phase_deg": 34.65886474692516,
+        "input_power_w": 3023.062365226795,
+        "resonant_current_rms_a": 10.257446625250845,
+        "resonant_current_peak_a": 14.524716510729016,
+        "magnetizing_current_rms_a": 4.897149645072007,
+        "magnetizing_current_peak_a": 8.055467116544285,
+        "primary_load_current_rms_a": 8.494000921457497,
+        "primary_load_current_peak_a": 12.378172119502606,
+        "secondary_current_rms_a": 63.705006910931225,
+        "secondary_current_peak_a": 92.83629089626955,
+        "rectifier_current_average_a": 56.604093626887405,
+        "resonant_capacitor_rms_v": 154.40238068051465,
+        "resonant_capacitor_peak_v": 218.2654111971968,
+        "output_capacitor_current_rms_a": 29.18173411481928,
+        "power_balance_error_w": -9.322320693172514e-11,
+        "power_balance_error_percent": -3.0837341632127193e-12
+      },
+      "convergence": {
+        "converged": true,
+        "residual_norm": 3.1074167913567105e-14,
+        "iterations": 21,
+        "method": "exact_zero_crossing_multi_harmonic_balance",
+        "message": "seed: `gtol` termination condition is satisfied.; final: `xtol` termination condition is satisfied."
+      },
+      "harmonic_orders": [
+        1,
+        3,
+        5,
+        7
+      ],
+      "warnings": [
+        "Multi-harmonic HB uses an ideal transformer and ideal full-bridge rectifier clamp.",
+        "Output-capacitor ripple is reconstructed after the HB DC balance; it is not a retained harmonic state.",
+        "Nonlinear MOSFET Coss, winding capacitance and leakage parasitics are reserved for the V8 parasitic layer."
+      ],
+      "diagnostics": {
+        "cost": 4.828019557602818e-28,
+        "seed_cost": 2.697931726510559e-28,
+        "seed_residual_norm": 2.322899794012027e-14,
+        "exact_rectifier_projection": true,
+        "regularized_fallback": false,
+        "exact_projection_message": "",
+        "zero_crossing_count": 2,
+        "first_zero_crossing_deg": 179.6982808388675,
+        "optimality": 1.8592030482321892e-10,
+        "active_mask_count": 0,
+        "predicted_load_mismatch": 3.6838633069312485e-13,
+        "frequency_evaluations": 22,
+        "frequency_guess_hz": 99688.7621985247,
+        "regulated_output_error_v": -4.445958268206596e-08,
+        "exact_sign_residual_norm": 3.1074167913567105e-14,
+        "power_balance_error_w": -9.317346894022194e-11,
+        "input_power_w": 3023.062365226795,
+        "series_loss_w": 0.4208608450794798,
+        "rectifier_drop_loss_w": 22.641509414969207
+      }
+    },
+    "switched_time_domain": {
+      "metrics": {
+        "switching_frequency_hz": 99665.61712528832,
+        "output_voltage_v": 52.95520275453417,
+        "output_power_w": 2994.930756967415,
+        "normalized_gain": 1.0004100516475156,
+        "input_phase_deg": 35.73176015783158,
+        "input_power_w": 3016.9610006629173,
+        "resonant_current_rms_a": 10.362528111961797,
+        "resonant_current_peak_a": 14.674003108192329,
+        "magnetizing_current_rms_a": 4.869039130169598,
+        "magnetizing_current_peak_a": 8.239342690286808,
+        "primary_load_current_rms_a": 8.510188065819612,
+        "primary_load_current_peak_a": 12.318290633734634,
+        "secondary_current_rms_a": 63.82641049364709,
+        "secondary_current_peak_a": 92.38717975300975,
+        "rectifier_current_average_a": 56.5544049752844,
+        "resonant_capacitor_rms_v": 155.3653552076994,
+        "resonant_capacitor_peak_v": 219.75754015673397,
+        "output_capacitor_current_rms_a": 29.54000116931143,
+        "power_balance_error_w": -1.021046250096333,
+        "power_balance_error_percent": -0.033843534930414365
+      },
+      "convergence": {
+        "converged": true,
+        "residual_norm": 3.2379699626971167e-12,
+        "iterations": 14,
+        "method": "periodic_shooting_rk4",
+        "message": "periodic shooting converged"
+      },
+      "harmonic_orders": [],
+      "warnings": [
+        "Switched model uses an ideal transformer and ideal full-bridge SR clamp.",
+        "MOSFET nonlinear Coss/Qoss, leakage inductance and winding capacitance are not yet included.",
+        "This is the V8.1 ideal switched reference; nonlinear Coss and magnetic parasitics are not included yet."
+      ],
+      "diagnostics": {
+        "dynamic_phasor_frequency_hz": 99665.61712528832,
+        "dynamic_phasor_output_voltage_v": 52.99999999999997,
+        "periodic_mismatch": 3.2379699626971167e-12,
+        "series_resistance_ohm": 0.004,
+        "series_loss_w": 0.4295279554847941,
+        "rectifier_drop_loss_w": 22.62176199011376,
+        "frequency_evaluations": 1,
+        "switched_output_error_v": -0.04479724546582986
+      }
+    }
+  }
+}

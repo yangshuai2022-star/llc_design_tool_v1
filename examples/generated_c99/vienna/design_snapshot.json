@@ -1,0 +1,195 @@
+{
+  "topology": "three_phase_vienna_pfc",
+  "numeric_format": "C99 float32",
+  "bsp_generated": false,
+  "config": {
+    "power_stage": {
+      "line_line_rms_v": 400.0,
+      "line_frequency_hz": 50.0,
+      "bus_voltage_v": 700.0,
+      "output_power_w": 10000.0,
+      "switching_frequency_hz": 65000.0,
+      "boost_inductance_h": 0.0006,
+      "phase_series_resistance_ohm": 0.08,
+      "upper_bus_capacitance_f": 0.00068,
+      "lower_bus_capacitance_f": 0.00068,
+      "efficiency": 0.98,
+      "load_model": "constant_power",
+      "modulation_limit": 0.96,
+      "minimum_effective_pulse_s": 0.0,
+      "deadtime_s": 1e-07
+    },
+    "firmware": {
+      "current_loop_rate_hz": 50000.0,
+      "reference_rate_hz": 25000.0,
+      "voltage_loop_rate_hz": 10000.0,
+      "balance_loop_rate_hz": 10000.0,
+      "current_computation_delay_s": 2e-06,
+      "pwm_update_delay_s": 7e-06,
+      "reference_update_delay_s": 2e-05,
+      "voltage_computation_delay_s": 4e-06,
+      "balance_injection_limit": 0.08,
+      "midpoint_current_gain_a_per_pu": 30.0,
+      "third_harmonic_injection_enabled": true,
+      "inductor_voltage_drop_feedforward_enabled": true
+    },
+    "current_controller": {
+      "kp": 0.02,
+      "ti_s": 0.00025,
+      "sample_time_s": 2e-05,
+      "output_min": -0.45,
+      "output_max": 0.45
+    },
+    "voltage_controller": {
+      "kp": 2e-05,
+      "ti_s": 0.08,
+      "sample_time_s": 0.0001,
+      "output_min": 0.0,
+      "output_max": 0.3
+    },
+    "balance_controller": {
+      "kp": 0.001,
+      "ti_s": 0.02,
+      "sample_time_s": 0.0001,
+      "output_min": -0.08,
+      "output_max": 0.08
+    },
+    "phase_current_sense": {
+      "name": "Vienna phase current",
+      "front_end_gain_v_per_unit": 0.03,
+      "amplifier_gain": 1.0,
+      "amplifier_bandwidth_hz": 1500000.0,
+      "source_resistance_ohm": 0.0,
+      "shunt_capacitance_f": 0.0,
+      "output_resistance_ohm": 220.0,
+      "adc_capacitance_f": 2e-09,
+      "second_resistance_ohm": 0.0,
+      "second_capacitance_f": 0.0,
+      "normalize_to_engineering_units": true,
+      "adc_vref_v": 3.3,
+      "adc_bits": 12,
+      "timing": {
+        "sample_rate_hz": 50000.0,
+        "adc_clock_hz": 60000000.0,
+        "acquisition_time_s": 3e-07,
+        "conversion_cycles": 13.0,
+        "soc_count": 1,
+        "soc_spacing_s": 0.0,
+        "recursive_previous_weight": 0.0,
+        "computation_delay_s": 0.0,
+        "pwm_update_delay_s": 0.0,
+        "include_zero_order_hold": true,
+        "digital_filter": {
+          "alpha": 1.0
+        }
+      }
+    },
+    "phase_voltage_sense": {
+      "name": "Vienna phase voltage",
+      "front_end_gain_v_per_unit": 0.005555555555555556,
+      "amplifier_gain": 1.0,
+      "amplifier_bandwidth_hz": 1500000.0,
+      "source_resistance_ohm": 0.0,
+      "shunt_capacitance_f": 0.0,
+      "output_resistance_ohm": 220.0,
+      "adc_capacitance_f": 2e-09,
+      "second_resistance_ohm": 0.0,
+      "second_capacitance_f": 0.0,
+      "normalize_to_engineering_units": true,
+      "adc_vref_v": 3.3,
+      "adc_bits": 12,
+      "timing": {
+        "sample_rate_hz": 50000.0,
+        "adc_clock_hz": 60000000.0,
+        "acquisition_time_s": 3e-07,
+        "conversion_cycles": 13.0,
+        "soc_count": 1,
+        "soc_spacing_s": 0.0,
+        "recursive_previous_weight": 0.0,
+        "computation_delay_s": 0.0,
+        "pwm_update_delay_s": 0.0,
+        "include_zero_order_hold": true,
+        "digital_filter": {
+          "alpha": 1.0
+        }
+      }
+    },
+    "split_bus_sense": {
+      "name": "Vienna split bus voltage",
+      "front_end_gain_v_per_unit": 0.013490725126475547,
+      "amplifier_gain": 1.0,
+      "amplifier_bandwidth_hz": 1000000.0,
+      "source_resistance_ohm": 1578.4148397976392,
+      "shunt_capacitance_f": 1e-09,
+      "output_resistance_ohm": 220.0,
+      "adc_capacitance_f": 2e-09,
+      "second_resistance_ohm": 0.0,
+      "second_capacitance_f": 0.0,
+      "normalize_to_engineering_units": true,
+      "adc_vref_v": 3.3,
+      "adc_bits": 12,
+      "timing": {
+        "sample_rate_hz": 10000.0,
+        "adc_clock_hz": 60000000.0,
+        "acquisition_time_s": 3e-07,
+        "conversion_cycles": 13.0,
+        "soc_count": 1,
+        "soc_spacing_s": 0.0,
+        "recursive_previous_weight": 0.0,
+        "computation_delay_s": 0.0,
+        "pwm_update_delay_s": 0.0,
+        "include_zero_order_hold": true,
+        "digital_filter": {
+          "alpha": 1.0
+        }
+      }
+    },
+    "frequency_start_hz": 0.5,
+    "frequency_stop_hz": 20000.0,
+    "frequency_points": 1600,
+    "waveform_line_cycles": 12,
+    "waveform_integration_rate_hz": 500000.0,
+    "switching_cycles": 2,
+    "switching_samples_per_cycle": 800,
+    "switching_line_angle_deg": 30.0,
+    "initial_midpoint_imbalance_v": 4.0,
+    "phase_current_gain_scale": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "phase_current_offset_a": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "phase_voltage_gain_scale": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "phase_voltage_offset_v": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "split_bus_gain_scale": [
+      1.0,
+      1.0
+    ],
+    "split_bus_offset_v": [
+      0.0,
+      0.0
+    ]
+  },
+  "controller_kinds": {
+    "current_abc": "pi",
+    "voltage": "pi",
+    "midpoint_balance": "pi"
+  },
+  "margins": {
+    "current_pm_deg": 51.64496683467749,
+    "voltage_pm_deg": 53.20484683644624,
+    "balance_pm_deg": 62.59391920017913
+  }
+}

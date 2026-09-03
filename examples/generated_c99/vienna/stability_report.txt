@@ -1,0 +1,8 @@
+CODE GENERATION VALIDATION
+
+Overall: PASS
+
+Checks:
+- current-loop phase margin = 51.64496683467749 deg (PASS)
+- voltage-loop phase margin = 53.20484683644624 deg (PASS)
+- balance-loop phase margin = 62.59391920017913 deg (PASS)

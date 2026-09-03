@@ -1,0 +1,12 @@
+{
+  "name": "Power Design Toolkit Web",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "postCreateCommand": "python -m pip install -e '.[web,dev]'",
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": {
+      "label": "Power Design Web",
+      "onAutoForward": "openBrowser"
+    }
+  }
+}

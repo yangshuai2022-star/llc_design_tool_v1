@@ -1,0 +1,27 @@
+Power Design Toolkit V8.1 Release Manifest
+Generated: 2026-09-03
+
+Source baseline commit:       8a88382  baseline V7.5 from user archive
+V8.1 implementation commit:   fd02d12  feat(llc): add V8 multi-fidelity FHA HB TD core
+Package version:              8.1.0
+
+Full repository tests:        250 collected / 248 passed / 2 expected-xfail / 0 failed
+Full test elapsed:            55.55 s
+Compileall:                   PASS
+Git whitespace check:         PASS
+CLI FHA/HB/TD comparison:     PASS
+Offline wheel build/install:  PASS
+GUI runtime:                  NOT EXECUTED (optional PySide6 unavailable)
+
+Wheel:
+  artifacts/power_design_toolkit-8.1.0-py3-none-any.whl
+  SHA-256: d89c67d7829d391633d4e0895c31c8f5e463e7486f2528ccc252fec74e185e4e
+
+Patch:
+  patches/V8_1_FROM_V7_5.patch
+
+Primary documentation:
+  README.md
+  V8_IMPLEMENTATION_NOTES.md
+  V8_CHANGELOG.md
+  TEST_REPORT_V8_1.txt

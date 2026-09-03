@@ -1,0 +1,50 @@
+LLC Design Tool V8.2 Patch Validation
+Date: 2026-09-03
+Baseline: V8.1 multi-fidelity package supplied in conversation
+
+NEW V8.2 TESTS
+- llc_design/tests/test_v8_sr_dcm_multiphase.py: 6 passed
+  * SR timing + Qrr recovery
+  * forced third-quadrant/reverse-current loss
+  * C99 LUT export
+  * DCM complementarity OPEN-state Is=0 / Ir=Im
+  * Golden-waveform magnetics + leakage/Cps
+  * fixed 2P 90deg / 3P 120deg interleaving + ripple cancellation
+
+V8.1 MULTI-FIDELITY REGRESSION
+- llc_design/tests/test_v8_multifidelity.py: 6 passed
+
+OTHER LLC REGRESSION
+- remaining llc_design/tests: 80 passed
+
+OTHER WORKSPACES
+- pfc_design/tests: 146 passed
+- power_codegen/tests: 3 passed
+- webapp/tests: 7 passed
+- backend/tests: 6 passed, 2 expected xfail
+
+AGGREGATE
+- 254 passed
+- 2 expected xfail
+- 0 observed failures in split regression runs
+
+BUILD / STATIC CHECKS
+- python -m compileall -q . : PASS
+- git diff --check : PASS
+- generated SR LUT gcc -std=c99 -Wall -Wextra -Werror : PASS
+- PySide6 runtime GUI launch: NOT RUN (optional PySide6 not installed in build environment)
+  GUI Python sources compile successfully.
+
+CLI SMOKE RESULTS (default 400 V / 53 V / 3 kW reference)
+- SR HB timing: ON delay 60.00 ns, OFF advance 57.99 ns, conduction 4917.39 ns
+- SR total loss: 14.766 W; Qrr loss 0.417 W (reference device data)
+- DCM @10% load: converged, periodic mismatch 1.910e-07, OPEN fraction 27.93%
+- 2P fixed 0/90deg: Cout Irms 5.5801 A, Vo ripple 28.692 mVpp
+- 3P fixed 0/120/240deg: Cout Irms 2.3162 A, Vo ripple 11.432 mVpp
+- Golden magnetics: core 4.692 W, CuP 15.023 W, CuS 9.293 W,
+  Llk estimate 3.020 uH, Cps estimate 1384.2 pF
+
+IMPORTANT MODEL BOUNDARIES
+- Qrr/trr and third-quadrant are engineering device models; selected-device hot data should replace references.
+- Complementarity topology constraints are exact; event-time resolution depends on samples/cycle.
+- Leakage/Cps are first-order geometry estimates and should be calibrated to impedance measurements.

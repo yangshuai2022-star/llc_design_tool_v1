@@ -1,0 +1,18 @@
+LLC Design Tool V4.1 - Draggable Bode Cursor
+
+Added to both GUI Bode workbenches:
+- Power-stage small-signal page
+- Complete digital-loop page
+
+Operation:
+- Left-click in either magnitude or phase plot to place the cursor.
+- Hold the left mouse button and drag horizontally.
+- The vertical cursor is synchronized between magnitude and phase axes.
+- Colored markers show the interpolated point on every visible curve.
+- Plot annotations and the GUI readout show frequency, gain in dB, and phase in degrees.
+- Values are interpolated on the logarithmic frequency axis.
+- Cursor frequency is retained when switching Bode curve groups.
+
+Validation:
+- 173 tests passed.
+- GUI Python modules compile successfully.

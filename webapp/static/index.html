@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Power Design Toolkit</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#mainContent">跳到主要内容</a>
+  <header class="appbar">
+    <div class="brand">
+      <div class="eyebrow">POWER DESIGN TOOLKIT · V8.1 WEB</div>
+      <h1>Power Design Platform</h1>
+    </div>
+    <nav class="tabs" id="nav" aria-label="主功能导航">
+      <a href="#/llc" data-route="llc">LLC</a>
+      <a href="#/control/loop" data-route="control">Control Loop</a>
+      <a href="#/pfc" data-route="pfc">PFC</a>
+      <a href="#/vienna" data-route="vienna">Vienna</a>
+      <a href="#/dab" data-route="dab">DAB</a>
+      <a href="#/database" data-route="database">Database</a>
+      <a href="#/report" data-route="report">Report</a>
+    </nav>
+    <div class="server-pill" role="status" aria-live="polite"><span id="healthDot"></span><span id="healthText">检查服务器…</span></div>
+  </header>
+
+  <main class="layout" id="mainContent" tabindex="-1">
+
+    <!-- ============ LLC 功率级设计视图 ============ -->
+    <section id="view-llc" class="view">
+      <aside class="panel controls">
+        <div class="panel-title">
+          <div><h2>设计参数</h2><p>单位已转换为工程常用单位</p></div>
+          <button class="ghost" id="resetBtn">恢复默认</button>
+        </div>
+
+        <section class="group">
+          <h3>电气规格</h3>
+          <div class="form-grid">
+            <label>标称母线 Vbus <span>V</span><input id="vbus_nom_v" type="number" step="1"></label>
+            <label>最低正常母线 <span>V</span><input id="vbus_min_normal_v" type="number" step="1"></label>
+            <label>最高母线 <span>V</span><input id="vbus_max_v" type="number" step="1"></label>
+            <label>Hold-up 终止母线 <span>V</span><input id="vbus_hold_end_v" type="number" step="1"></label>
+            <label>输出电压 Vout <span>V</span><input id="vout_v" type="number" step="0.1"></label>
+            <label>输出功率 Pout <span>kW</span><input id="pout_kw" type="number" step="0.1"></label>
+          </div>
+        </section>
+
+        <section class="group">
+          <h3>谐振腔与变压器</h3>
+          <div class="form-grid">
+            <label>谐振频率 fr <span>kHz</span><input id="fr_khz" type="number" step="1"></label>
+            <label>最低频率 fmin <span>kHz</span><input id="fmin_khz" type="number" step="1"></label>
+            <label>最高频率 fmax <span>kHz</span><input id="fmax_khz" type="number" step="1"></label>
+            <label>Ln = Lm/Lr <span>—</span><input id="ln_ratio" type="number" step="0.1"></label>
+            <label>Q @ 满载 <span>—</span><input id="q_full_load" type="number" step="0.01"></label>
+            <label>原边匝数 Np <span>T</span><input id="primary_turns" type="number" step="1"></label>
+            <label>副边匝数 Ns <span>T</span><input id="secondary_turns" type="number" step="1"></label>
+            <label>原边拓扑 <span>—</span><select id="primary_topology"></select></label>
+          </div>
+        </section>
+
+        <section class="group">
+          <h3>器件与边界</h3>
+          <div class="form-grid single">
+            <label>Primary MOSFET <span>—</span><select id="primary_device"></select></label>
+            <label>SR MOSFET <span>—</span><select id="sr_device"></select></label>
+            <label>Primary deadtime <span>ns</span><input id="primary_deadtime_ns" type="number" step="10"></label>
+            <label>Bus capacitance <span>µF</span><input id="bus_cap_uf" type="number" step="10"></label>
+          </div>
+        </section>
+
+        <button class="run" id="runBtn">运行完整 LLC 计算</button>
+        <div class="error-box hidden" id="errorBox"></div>
+      </aside>
+
+      <section class="content">
+        <div class="hero-card panel">
+          <div>
+            <div class="eyebrow">ENGINEERING STATUS</div>
+            <div class="status-line"><span class="status pending" id="statusBadge">WAIT</span><span id="statusMessage">等待计算</span></div>
+          </div>
+          <div class="hero-metrics" id="heroMetrics"></div>
+        </div>
+
+        <div class="metric-grid" id="metrics"></div>
+
+        <div class="panel chart-panel">
+          <div class="panel-title"><div><h2>FHA 增益地图</h2><p>不同负载曲线、母线目标增益与实际工作点</p></div></div>
+          <div id="gainChart" class="chart"></div>
+        </div>
+
+        <div class="two-col">
+          <div class="panel chart-panel">
+            <div class="panel-title"><div><h2>标称损耗分解</h2><p>非重叠系统损耗桶</p></div></div>
+            <div id="lossChart" class="chart small"></div>
+          </div>
+          <div class="panel chart-panel">
+            <div class="panel-title"><div><h2>效率工作点</h2><p>Vbus / Load 工况</p></div></div>
+            <div id="effChart" class="chart small"></div>
+          </div>
+        </div>
+
+        <div class="panel table-panel">
+          <div class="panel-title"><div><h2>工作点审计</h2><p>频率、相角、ZVS 裕量、损耗与效率</p></div></div>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="LLC 工作点审计表，可横向滚动"><table><thead><tr>
+            <th>工况</th><th>fs / kHz</th><th>相角 / °</th><th>Ir,rms / A</th><th>ZVS margin</th><th>Loss / W</th><th>η / %</th><th>Branch</th>
+          </tr></thead><tbody id="opTable"></tbody></table></div>
+        </div>
+
+        <div class="panel messages-panel hidden" id="messagesPanel">
+          <div class="panel-title"><div><h2>可行性与告警</h2><p>服务器端原模型判定</p></div></div>
+          <div id="messages"></div>
+        </div>
+      </section>
+
+      <aside class="panel result-rail">
+        <div class="panel-title"><div><h2>Design Status</h2><p>标称工况</p></div></div>
+        <div class="rail-status pending" id="railStatus">WAIT</div>
+        <dl class="rail-list">
+          <dt>Efficiency</dt><dd id="railEff">—</dd>
+          <dt>Max Temp</dt><dd id="railTemp">—</dd>
+          <dt>ZVS</dt><dd id="railZvs">—</dd>
+          <dt>Frequency</dt><dd id="railFreq">—</dd>
+          <dt>Transformer</dt><dd id="railXfrm">—</dd>
+          <dt>BOM Cost (ref)</dt><dd id="railCost">—</dd>
+        </dl>
+        <button class="ghost wide" id="railReport">生成 PDF 报告</button>
+      </aside>
+    </section>
+
+    <!-- ============ Control Loop 视图 ============ -->
+    <section id="view-control" class="view hidden">
+      <aside class="panel controls">
+        <div class="panel-title"><div><h2>Plant 参数</h2><p>FM LLC 小信号对象</p></div></div>
+        <section class="group">
+          <h3>工作点</h3>
+          <div class="form-grid">
+            <label>Vin <span>V</span><input id="c_vin" type="number" step="1" value="400"></label>
+            <label>Vout <span>V</span><input id="c_vout" type="number" step="0.1" value="53"></label>
+            <label>Pout <span>W</span><input id="c_pout" type="number" step="10" value="3000"></label>
+            <label>负载比例 <span>—</span><input id="c_load" type="number" step="0.05" value="1"></label>
+          </div>
+        </section>
+        <section class="group">
+          <h3>谐振腔</h3>
+          <div class="form-grid">
+            <label>Lr <span>µH</span><input id="c_lr" type="number" step="0.1" value="23.8"></label>
+            <label>Cr <span>nF</span><input id="c_cr" type="number" step="0.1" value="106.5"></label>
+            <label>Lm <span>µH</span><input id="c_lm" type="number" step="0.1" value="119"></label>
+            <label>变比 n <span>—</span><input id="c_ratio" type="number" step="0.1" value="7.5"></label>
+          </div>
+        </section>
+        <section class="group">
+          <h3>采样与补偿</h3>
+          <div class="form-grid">
+            <label>采样频率 <span>kHz</span><input id="c_fs" type="number" step="1" value="50"></label>
+            <label>目标带宽 <span>Hz</span><input id="c_bw" type="number" step="100" value="5000"></label>
+            <label>目标相位裕度 <span>°</span><input id="c_pm" type="number" step="5" value="55"></label>
+            <label>补偿器类型 <span>—</span><select id="c_type">
+              <option value="type_iii">Type-III (2P2Z)</option>
+              <option value="type_ii">Type-II</option>
+              <option value="pi">PI</option>
+            </select></label>
+          </div>
+        </section>
+        <button class="run" id="cRunBtn">设计补偿器并分析</button>
+        <button class="ghost wide" id="cPlantBtn">仅建立 Plant 模型</button>
+        <div class="error-box hidden" id="cErrorBox"></div>
+      </aside>
+
+      <section class="content">
+        <div class="hero-card panel">
+          <div>
+            <div class="eyebrow">LOOP STATUS</div>
+            <div class="status-line"><span class="status pending" id="cStatusBadge">WAIT</span><span id="cStatusMessage">等待分析</span></div>
+          </div>
+          <div class="hero-metrics" id="cHeroMetrics"></div>
+        </div>
+        <div class="panel tabs-panel">
+          <div class="tabs2" id="cTabs">
+            <button class="tab active" data-tab="plant">1. Plant Model</button>
+            <button class="tab" data-tab="loop">2. Loop Gain</button>
+            <button class="tab" data-tab="bode">3. Bode Plot</button>
+            <button class="tab" data-tab="comp">4. Compensation</button>
+            <button class="tab" data-tab="digital">5. Digital Controller</button>
+            <button class="tab" data-tab="protection">6. Protection</button>
+          </div>
+          <div id="cTab-plant" class="tab-body">
+            <div class="panel-title"><div><h2>Small-Signal Plant (Gvd)</h2><p>频率调制 → 输出电压，动态相量模型线性化</p></div></div>
+            <div class="metric-grid" id="cPlantMetrics"></div>
+            <div class="table-wrap mt" tabindex="0" role="region" aria-label="Plant 极点零点表，可横向滚动"><table><thead><tr><th>极点</th><th>零点</th></tr></thead>
+              <tbody id="cPoleTable"></tbody></table></div>
+            <pre class="code-block" id="cPlantTf"></pre>
+          </div>
+          <div id="cTab-loop" class="tab-body hidden">
+            <div class="panel-title"><div><h2>Loop Gain 稳定裕度</h2><p>内核数字环路全链路分析（含延迟包络）</p></div></div>
+            <div class="metric-grid" id="cLoopMetrics"></div>
+            <div class="table-wrap mt" tabindex="0" role="region" aria-label="环路稳定裕度表，可横向滚动"><table><thead><tr><th>延迟包络</th><th>穿越频率 / Hz</th><th>相位裕度 / °</th><th>增益裕度 / dB</th><th>稳定</th></tr></thead>
+              <tbody id="cLoopTable"></tbody></table></div>
+          </div>
+          <div id="cTab-bode" class="tab-body hidden">
+            <div class="panel-title"><div><h2>Bode Plot</h2><p>开环增益/相位，标注穿越频率与裕度</p></div></div>
+            <div id="bodeMag" class="chart"></div>
+            <div id="bodePhase" class="chart"></div>
+          </div>
+          <div id="cTab-comp" class="tab-body hidden">
+            <div class="panel-title"><div><h2>Compensation 设计结果</h2><p>环路整形 + 内核裕度闭环迭代</p></div></div>
+            <div class="metric-grid" id="cCompMetrics"></div>
+            <div class="table-wrap mt" tabindex="0" role="region" aria-label="补偿器参数表，可横向滚动"><table><thead><tr><th>模拟参数</th><th>数值</th><th>数字系数</th><th>数值</th></tr></thead>
+              <tbody id="cCompTable"></tbody></table></div>
+          </div>
+          <div id="cTab-digital" class="tab-body hidden">
+            <div class="panel-title"><div><h2>Digital Controller</h2><p>差分方程与 C 代码（内核生成）</p></div></div>
+            <div class="metric-grid" id="cDigMetrics"></div>
+            <pre class="code-block" id="cDigCode"></pre>
+          </div>
+          <div id="cTab-protection" class="tab-body hidden">
+            <div class="panel-title"><div><h2>Protection Supervisor</h2><p>控制状态机设计模板</p></div></div>
+            <div class="metric-grid" id="cProtMetrics"></div>
+            <div class="table-wrap mt" tabindex="0" role="region" aria-label="保护状态表，可横向滚动"><table><thead><tr><th>状态</th><th>描述</th><th>动作</th></tr></thead>
+              <tbody id="cProtTable"></tbody></table></div>
+            <div class="table-wrap mt" tabindex="0" role="region" aria-label="保护状态转移表，可横向滚动"><table><thead><tr><th>转移</th><th>→</th><th>条件</th></tr></thead>
+              <tbody id="cTransTable"></tbody></table></div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel result-rail">
+        <div class="panel-title"><div><h2>Loop Result</h2><p>标称延迟包络</p></div></div>
+        <div class="rail-status pending" id="cRailStatus">WAIT</div>
+        <dl class="rail-list">
+          <dt>Bandwidth</dt><dd id="cRailBw">—</dd>
+          <dt>Phase Margin</dt><dd id="cRailPm">—</dd>
+          <dt>Gain Margin</dt><dd id="cRailGm">—</dd>
+          <dt>Controller</dt><dd id="cRailType">—</dd>
+          <dt>Target BW</dt><dd id="cRailTarget">—</dd>
+        </dl>
+        <button class="ghost wide" id="cReportBtn">导出控制报告</button>
+      </aside>
+    </section>
+
+    <!-- ============ Database 视图 ============ -->
+    <section id="view-database" class="view hidden">
+      <div class="content">
+        <div class="panel table-panel">
+          <div class="panel-title"><div><h2>磁芯数据库</h2><p>服务器端内核数据（cores.json）只读浏览</p></div>
+            <select id="dbFamily" class="inline-select"><option value="">全部系列</option></select></div>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="磁芯数据库表，可横向滚动"><table><thead><tr>
+            <th>型号</th><th>系列</th><th>形状</th><th>材料</th><th>Ae / mm²</th><th>Ve / mm³</th><th>le / mm</th><th>质量 / g</th><th>成本 / $</th><th>热阻 / K·W⁻¹</th>
+          </tr></thead><tbody id="dbTable"></tbody></table></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Report 视图 ============ -->
+    <section id="view-report" class="view hidden">
+      <div class="content">
+        <div class="panel table-panel">
+          <div class="panel-title"><div><h2>Design Report</h2><p>服务器端生成 PDF（9 章节）/ Excel 计算书</p></div></div>
+          <div class="form-grid single report-form">
+            <label>项目 <span>—</span><input id="r_project" type="text" placeholder="例如：3.3kW LLC 电源"></label>
+            <label>工程师 <span>—</span><input id="r_engineer" type="text" placeholder="姓名"></label>
+          </div>
+          <div class="btn-row">
+            <button class="run" id="rPdfBtn">生成 PDF 报告</button>
+            <button class="ghost" id="rXlsxBtn">导出 Excel</button>
+          </div>
+          <div class="error-box hidden" id="rErrorBox"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 占位视图 ============ -->
+    <section id="view-placeholder" class="view hidden">
+      <div class="content">
+        <div class="panel table-panel">
+          <div class="panel-title"><div><h2 id="phTitle">模块</h2><p>该模块尚未接入计算内核</p></div></div>
+          <div class="placeholder-body">
+            <div class="eyebrow">ROADMAP</div>
+            <p id="phText">本模块的 Python 工程内核已随 Power Design Toolkit 打包，Web 接入按设计稿路线图推进。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>Power Design Toolkit · Python kernels on server · Browser UI only</footer>
+  <!-- Plotly first (local file, no external network), then the app shell. -->
+  <script src="/static/plotly.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

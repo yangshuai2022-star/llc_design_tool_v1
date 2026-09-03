@@ -1,0 +1,22 @@
+{
+  "materials": {
+    "Kool Mu 26u":  {"k": 15.0, "alpha": 1.38, "beta": 2.05, "f_range_kHz": [10, 500]},
+    "Kool Mu 40u":  {"k": 20.0, "alpha": 1.40, "beta": 2.07, "f_range_kHz": [10, 500]},
+    "Kool Mu 60u":  {"k": 28.0, "alpha": 1.42, "beta": 2.10, "f_range_kHz": [10, 500]},
+    "Kool Mu 75u":  {"k": 32.0, "alpha": 1.44, "beta": 2.12, "f_range_kHz": [10, 500]},
+    "Kool Mu 90u":  {"k": 38.0, "alpha": 1.45, "beta": 2.14, "f_range_kHz": [10, 500]},
+    "Kool Mu 125u": {"k": 45.0, "alpha": 1.46, "beta": 2.15, "f_range_kHz": [10, 500]},
+    "Sendust CS":   {"k": 22.0, "alpha": 1.40, "beta": 2.08, "f_range_kHz": [10, 300]},
+    "MPP 60u":      {"k": 10.0, "alpha": 1.32, "beta": 2.00, "f_range_kHz": [10, 1000]},
+    "MPP 125u":     {"k": 15.0, "alpha": 1.34, "beta": 2.02, "f_range_kHz": [10, 1000]},
+    "MPP 300u":     {"k": 22.0, "alpha": 1.36, "beta": 2.05, "f_range_kHz": [10, 1000]},
+    "HighFlux 60u": {"k": 18.0, "alpha": 1.36, "beta": 2.04, "f_range_kHz": [10, 500]},
+    "HighFlux 125u":{"k": 28.0, "alpha": 1.38, "beta": 2.06, "f_range_kHz": [10, 500]},
+    "Ferrite 3C90": {"k": 0.5,  "alpha": 1.30, "beta": 2.50, "f_range_kHz": [20, 200]},
+    "Ferrite 3C94": {"k": 0.3,  "alpha": 1.25, "beta": 2.60, "f_range_kHz": [20, 400]},
+    "Ferrite N87":  {"k": 0.4,  "alpha": 1.30, "beta": 2.45, "f_range_kHz": [20, 500]},
+    "Ferrite N97":  {"k": 0.2,  "alpha": 1.28, "beta": 2.55, "f_range_kHz": [20, 500]},
+    "Amorphous":    {"k": 0.05, "alpha": 1.50, "beta": 2.00, "f_range_kHz": [5, 100]},
+    "Nanocrystalline": {"k": 0.02, "alpha": 1.60, "beta": 2.10, "f_range_kHz": [5, 50]}
+  }
+}

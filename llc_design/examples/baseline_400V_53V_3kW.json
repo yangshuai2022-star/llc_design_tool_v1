@@ -1,0 +1,23 @@
+{
+  "vbus_nom_v": 400.0,
+  "vbus_min_normal_v": 360.0,
+  "vbus_max_v": 420.0,
+  "vbus_hold_end_v": 300.0,
+  "vout_v": 53.0,
+  "pout_w": 3000.0,
+  "primary_topology": "FULL_BRIDGE",
+  "secondary_topology": "FULL_BRIDGE_SR",
+  "resonant_frequency_hz": 100000.0,
+  "minimum_frequency_hz": 60000.0,
+  "maximum_frequency_hz": 180000.0,
+  "ln_ratio": 5.0,
+  "q_full_load": 0.35,
+  "primary_turns": 30,
+  "secondary_turns": 4,
+  "bus_capacitance_f": 0.0018,
+  "requested_hold_time_s": 0.02,
+  "output_capacitance_f": 0.0015,
+  "output_cap_esr_ohm": 0.0015,
+  "sr_parallel_devices_per_position": 2,
+  "litz_strand_copper_diameter_m": 0.0001
+}

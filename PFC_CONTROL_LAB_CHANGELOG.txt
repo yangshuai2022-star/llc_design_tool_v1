@@ -1,0 +1,32 @@
+PFC CONTROL LAB V6
+
+Workspace/UI architecture:
+- LLC and PFC are now separate top-level workspaces.
+- GUI startup first asks the user to enter LLC or PFC design.
+- Both workspaces provide toolbar actions to switch directly or return to the selector.
+- The PFC page is no longer embedded among LLC tabs.
+
+PFC Bode redesign:
+- Current-loop Bode defaults to Li open loop only.
+- Voltage-loop Bode defaults to Lv open loop only.
+- Closed-loop responses are available but disabled by default.
+- Every transfer function has an independent visibility check box.
+- Quick actions: open loop only, show all, hide all.
+- Open-loop crossover and phase-margin markers are displayed when available.
+- Existing draggable Gain/Phase cursor is retained and synchronized.
+
+PFC waveform redesign:
+- Added a dedicated final one-AC-period overview.
+- Added a separate one-AC-period control-detail view.
+- Added configurable 1..20 local switching periods and samples per period.
+- Added measured current, voltage error, Vrms estimate, bus ripple, load current,
+  boost output current, minimum-pulse state and multi-rate update strobes.
+- Added switch-device currents and bus-capacitor current in switching-period view.
+- Static exports now use open-loop-only Bode plots and include AC overview,
+  AC control and switching-cycle PNG files.
+
+Control architecture remains firmware matched:
+- 50 kHz current inner loop.
+- 25 kHz AMC/reference and duty-feedforward layer.
+- 10 kHz bus-voltage outer loop.
+- No half-wave synchronous observer in the PFC control path.

@@ -1,0 +1,249 @@
+Power Design Toolkit / LLC Design Tool V8.1
+Release Candidate Verification Report
+Date: 2026-09-03
+
+======================================================================
+1. RELEASE SCOPE
+======================================================================
+
+Implemented in this package:
+  - V8.0 common LLC multi-fidelity analysis contracts and Golden Waveform layer
+  - V8.1 nonlinear multi-harmonic harmonic-balance solver
+  - Exact rectifier commutation zero-crossing projection for continuous-clamp branch
+  - Explicit regularized fallback at light-load/discontinuous branch transitions
+  - FHA / HB / switched-periodic TD orchestration and error comparison
+  - Common CSV / JSON / Markdown / waveform export
+  - CLI integration: waveforms --mode fha|hb, model-compare
+  - GUI source integration: FHA/HB/TD page and HB waveform command
+  - Full-bridge and half-bridge HB paths
+
+Not claimed as implemented in this release:
+  - V8 enhanced transformer winding/core/parasitic/thermal solver
+  - Nonlinear MOSFET Coss/Qoss commutation model
+  - Digital SR timing/LUT/loss
+  - 2-phase 90-degree and 3-phase 120-degree interleaved LLC pages
+  - Corner/sensitivity/measurement calibration
+
+======================================================================
+2. BUILD ENVIRONMENT
+======================================================================
+
+Python:      3.13.5
+Platform:    Linux 6.18.35 x86_64, glibc 2.41
+NumPy:       2.3.5
+SciPy:       1.17.0
+Matplotlib:  3.10.8
+Pandas:      2.2.3
+Package:     power-design-toolkit 8.1.0
+
+The project declares Python >= 3.10. The release candidate was executed in the
+above environment. Windows and macOS source compatibility is preserved, but
+native GUI execution on those operating systems must be confirmed by the user.
+
+======================================================================
+3. STATIC / SOURCE CHECKS
+======================================================================
+
+[PASS] python -m compileall -q .
+[PASS] git diff --check
+[PASS] llc_design.__version__ == 8.1.0
+[PASS] pyproject.toml version == 8.1.0
+[PASS] wheel contains llc_design/analysis and GUI comparison modules
+[INFO] ruff was not installed in the execution environment; no ruff claim is made.
+
+======================================================================
+4. FULL REPOSITORY TEST RESULT
+======================================================================
+
+Command:
+  python -m pytest -q
+
+Result:
+  Collected:          250
+  Passed:             248
+  Expected xfail:       2
+  Failed:               0
+  Elapsed:          55.55 s
+  Max RSS:        293048 KiB
+
+Suite collection:
+  pfc_design/tests:      146
+  llc_design/tests:       86
+  power_codegen/tests:     3
+  webapp/tests:            7
+  backend/tests:           8
+
+Existing expected-xfail tests:
+  1. backend/tests/test_control_api.py::
+     test_compensator_design_meets_bandwidth_and_phase_margin
+  2. backend/tests/test_control_api.py::
+     test_loop_gain_api_reports_margins
+
+Both xfails document the pre-existing phase-margin limitation of one standalone
+2P2Z stage with the present flat in-band EDF plant. They are unrelated to the
+V8 LLC multi-harmonic implementation.
+
+New V8 test module:
+  llc_design/tests/test_v8_multifidelity.py
+
+V8 regression coverage:
+  - harmonic phasor reconstruction/extraction
+  - exact sign projection and analytical mean(abs(i))
+  - exact regulated HB at full load
+  - nonzero H3/H5 current content
+  - HB power balance and output-node KCL
+  - explicit light-load fallback reporting
+  - full-bridge and half-bridge HB regulation
+  - Golden reference selection
+  - CSV/JSON/Markdown comparison export
+
+======================================================================
+5. DEFAULT 400 V / 53 V / 3 kW NUMERICAL VALIDATION
+======================================================================
+
+Command:
+  python -m llc_design model-compare \
+    --vbus 400 --load 1.0 \
+    --max-harmonic 7 --hb-samples 512 --td-samples 512 \
+    --output <validation-output>
+
+Selected reference:
+  switched_time_domain
+
+FHA:
+  Converged:          PASS
+  Fsw:          99.688762 kHz
+  Vo:           53.000000 V
+  Ir RMS:        9.680411 A
+  Ir RMS error: -6.5825 % relative to switched TD
+  VCr PK error: -6.6269 % relative to switched TD
+
+Nonlinear HB, H1/H3/H5/H7:
+  Converged:          PASS
+  Method: exact_zero_crossing_multi_harmonic_balance
+  Residual:      3.1074e-14
+  Fsw:          99.258907 kHz
+  Vo:           53.000000 V
+  Ir RMS:       10.257447 A
+  Ir RMS error: -1.0141 % relative to switched TD
+  VCr PK error: -0.6790 % relative to switched TD
+  Power-balance error: approximately -3.1e-12 %
+
+Switched periodic TD:
+  Converged:          PASS
+  Method: periodic_shooting_rk4
+  Residual:      3.2380e-12
+  Fsw:          99.665617 kHz
+  Vo:           52.955203 V
+  Ir RMS:       10.362528 A
+  VCr PK:      219.757540 V
+
+CLI elapsed time for the three-model comparison and waveform export:
+  10.12 s
+
+The compact reproducible outputs are included under:
+  release_validation/V8_1_baseline/
+
+======================================================================
+6. HB OPERATING-POINT SMOKE MATRIX
+======================================================================
+
+H1/H3/H5, 256 samples/cycle:
+
+  Full bridge, 300 V, 100 % load:
+    PASS, exact branch, Fsw = 66.7321 kHz, Vo = 53.00000 V
+
+  Full bridge, 360 V, 100 % load:
+    PASS, exact branch, Fsw = 83.8470 kHz, Vo = 53.00000 V
+
+  Full bridge, 420 V, 100 % load:
+    PASS, exact branch, Fsw = 111.1795 kHz, Vo = 53.00000 V
+
+  Full bridge, 400 V, 50 % load:
+    PASS, exact branch, Fsw = 99.3344 kHz, Vo = 53.00000 V
+
+  Full bridge, 400 V, 20 % load:
+    PASS, regularized fallback explicitly flagged,
+    Fsw = 100.4402 kHz, Vo = 53.00000 V
+
+  Half bridge, 400 V, 100 % load, Np = 15:
+    PASS, exact branch, Fsw = 99.2639 kHz, Vo = 53.00000 V
+
+======================================================================
+7. WHEEL BUILD / INSTALL TEST
+======================================================================
+
+Build command:
+  python -m pip wheel . --no-deps --no-build-isolation --wheel-dir dist
+
+Result:
+  [PASS] power_design_toolkit-8.1.0-py3-none-any.whl
+
+SHA-256:
+  d89c67d7829d391633d4e0895c31c8f5e463e7486f2528ccc252fec74e185e4e
+
+Clean target-directory install:
+  [PASS] package imports as version 8.1.0
+  [PASS] installed-wheel H1/H3/H5 HB solve
+  [PASS] exact zero-crossing method
+  [PASS] Vo = 53.000000 V
+
+The first isolated wheel attempt tried to download the declared setuptools
+build dependency and failed because the execution environment has no Internet
+access. Rebuilding with the already-installed local build backend succeeded.
+This was an environment/network issue, not a source-build failure.
+
+======================================================================
+8. GUI STATUS
+======================================================================
+
+[PASS] GUI Python source compile check
+[PASS] GUI source/package contains ModelComparisonView and HB waveform actions
+[NOT EXECUTED] Real Qt window instantiation
+
+Reason:
+  PySide6 is an optional dependency and was not installed in the build
+  environment. Install with:
+
+    python -m pip install -e ".[gui]"
+
+Then launch with:
+
+    python -m llc_design gui
+
+Offline user validation should check:
+  - FHA / HB / TD tab opens
+  - Run button remains responsive through worker thread
+  - table/reference/warnings render correctly
+  - HB waveform page plots all common nodes
+  - Chinese fonts render correctly on Windows
+
+======================================================================
+9. KNOWN NUMERICAL / PHYSICAL BOUNDARIES
+======================================================================
+
+1. Exact HB currently models the ideal continuously clamped full-bridge
+   rectifier/SR branch. Around light-load discontinuous topology transitions,
+   the solver may use the explicitly reported regularized branch.
+
+2. The switched TD reference is the existing ideal-switching periodic model.
+   It is not a nonlinear-Coss or semiconductor-recovery SPICE model.
+
+3. The primary bridge deadtime is represented in bridge/gate waveforms. Full
+   nonlinear Coss/Qoss charge commutation is deferred.
+
+4. Winding capacitance, detailed leakage network, device recovery and the
+   planned V8 magnetic feedback-to-electrical model are deferred.
+
+5. HB/TD agreement is a model cross-check, not a substitute for PLECS/SPICE
+   and hardware correlation once real parasitics are introduced.
+
+======================================================================
+10. RELEASE CONCLUSION
+======================================================================
+
+The V8.0 architecture and V8.1 multi-harmonic/Golden Solver milestone is ready
+for offline engineering evaluation. All repository tests passed except the two
+explicit pre-existing xfails. The numerical core, CLI, exports and wheel were
+executed from the release-candidate source. GUI runtime validation remains for
+a machine with PySide6 and a display environment.

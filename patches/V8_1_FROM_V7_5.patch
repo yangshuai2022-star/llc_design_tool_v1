@@ -1,0 +1,4597 @@
+diff --git a/.github/workflows/build-release.yml b/.github/workflows/build-release.yml
+index 46cc86f..dbb1e21 100644
+--- a/.github/workflows/build-release.yml
++++ b/.github/workflows/build-release.yml
+@@ -78,9 +78,12 @@ jobs:
+           files: ${{ matrix.zip-name }}
+           generate_release_notes: true
+           body: |
+-            Power Design Toolkit V7.5 双平台安装包（自动构建）
++            Power Design Toolkit V8.1 双平台安装包（自动构建）
+ 
+-            ## V7.5 主要功能
++            ## V8.1 主要功能
++            - LLC V8.0 统一 FHA / 多谐波 HB / 分段时域分析接口与 Golden Waveform 数据层
++            - LLC V8.1 自洽非线性多谐波求解、精确换向零点投影、模型误差对比与 CSV/JSON/Markdown 导出
++            - GUI 新增 FHA / HB / TD 对比页与多谐波 HB 波形入口；CLI 新增 `model-compare`
+             - GUI 自动适配 Windows 11 深色/浅色主题：启动时检测系统外观并切换配色，
+               解决深色主题下浅色背景 + 跟随系统的浅色文字导致整屏不可见的问题
+             - README 新增开发时间线，同步展示功能演进与缺陷修复
+diff --git a/.gitignore b/.gitignore
+index 08e54d3..22de771 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -2,6 +2,9 @@
+ __pycache__/
+ *.py[cod]
+ *.egg-info/
++.pytest_cache/
++.mplcache/
++**/.mplcache/
+ build/
+ dist/
+ .venv/
+diff --git a/README.md b/README.md
+index f1f071e..1ee0d7c 100644
+--- a/README.md
++++ b/README.md
+@@ -1,4 +1,4 @@
+-# Power Design Toolkit V7.5
++# Power Design Toolkit V8.1
+ 
+ Integrated engineering design and control-analysis toolkit for:
+ 
+@@ -6,7 +6,7 @@ Integrated engineering design and control-analysis toolkit for:
+ - **Single-phase TTPL PFC**: firmware-shaped dual-loop control, three sensing chains, open-loop Bode analysis, full settled AC-cycle solver, zero-crossing analyzer, workpoint-derived switching waveforms, PF/THD/harmonics.
+ - **Three-phase Vienna PFC**: DC-voltage outer loop + three ABC stationary-frame current loops, split-bus midpoint balance, three-phase sensing, common-mode/third-harmonic modulation support, full line-cycle solver, sector analysis, workpoint-derived three-level switching waveforms and per-phase PF/THD.
+ 
+-V7 reorganizes the GUI into separate **LLC** and **PFC** workspaces. The PFC workspace contains independent **TTPL** and **Vienna** sub-workspaces.
++V8.1 preserves the V7 LLC/PFC/Vienna workspaces and adds the first V8 LLC multi-fidelity analysis core: a common FHA / nonlinear multi-harmonic / switched-periodic interface, model comparison, waveform export and GUI/CLI integration. Existing V7 design flows remain available.
+ 
+ ## 开发时间线 / Development Timeline
+ 
+@@ -39,6 +39,9 @@ Legend: 🚀 Feature · 🐛 Bugfix · 🎨 GUI/UX · 🧪 Test/CI/Build
+ | V7.4 | 🚀 | 工具栏“检查更新”：后台线程查 GitHub Releases API；启动 2.5s 静默自检；联系邮箱/微信 |
+ | 2026-08-17 | 🚀 | GUI 自动适配 Windows 11 深色/浅色主题（注册表检测 + Fusion 调色板 + 两套 token） |
+ | 2026-08-17 | 🐛 | 修复 Win11 深色主题下整屏不可见：浅色背景 + 跟随系统的浅色文字 → 统一从主题模块取色 |
++| 2026-09-03 / V8.0 | 🚀 | LLC 分析架构重构：统一工作点请求、收敛状态、Golden Waveform、指标与模型比较数据结构；保留 V7 API |
++| 2026-09-03 / V8.1 | 🚀 | 新增自洽非线性多谐波 HB（1/3/5/7 次自适应）、精确换向零点投影、FHA/HB/分段时域比较、CLI/GUI 与导出 |
++| 2026-09-03 / V8.1 | 🧪 | 新增多谐波物理一致性、轻载分支降级、Golden 参考选择和导出回归测试；完成全仓库测试与 wheel 构建 |
+ 
+ ## Install
+ 
+@@ -86,7 +89,33 @@ power-design-gui
+ 
+ The launcher first asks whether to enter **LLC Design** or **PFC Design**. Both top-level windows preserve their state while switching.
+ 
+-## LLC V7 highlights
++## LLC V8.1 multi-fidelity analysis
++
++V8.1 introduces a common electrical-analysis contract while retaining the existing V7 modules:
++
++- **FHA** — fast, backward-compatible analytical design baseline.
++- **Nonlinear multi-harmonic balance (HB)** — solves the selected odd harmonics together with the rectifier polarity/commutation state; it is not a linear sum of independent FHA harmonic circuits.
++- **Switched periodic time-domain model (TD)** — adapts the existing piecewise switched steady-state solver as the current ideal-topology reference.
++
++All three layers return a common waveform/metric schema. The model-comparison view reports convergence, switching frequency, gain, RMS/peak currents, resonant-capacitor stress and errors relative to the highest converged fidelity.
++
++The default HB sequence is adaptive `H1 -> H1/H3/H5 -> H1/H3/H5/H7`. At continuous-clamp operating points, rectifier commutation angles are found from the reconstructed trigonometric current and the sign-function Fourier coefficients are integrated exactly between zero crossings. Near light-load/discontinuous topology transitions, V8.1 can explicitly return a regularized projection with a warning instead of silently reporting an exact solution.
++
++CLI examples:
++
++```bash
++# Generate a nonlinear multi-harmonic waveform
++python -m llc_design waveforms --mode hb --samples 1024 --output output/llc_hb
++
++# Compare FHA, HB and switched-periodic TD at one work point
++python -m llc_design model-compare --vbus 400 --load 1.0 \
++    --max-harmonic 7 --hb-samples 1024 --td-samples 1024 \
++    --output output/llc_v8_compare
++```
++
++The comparison export contains CSV, JSON and Markdown summaries plus optional per-model waveform files. See [`V8_IMPLEMENTATION_NOTES.md`](V8_IMPLEMENTATION_NOTES.md) for equations, numerical strategy, validation and known boundaries.
++
++## LLC V7 foundation retained in V8.1
+ 
+ ### Q / gain / ZVS map
+ 
+@@ -227,6 +256,7 @@ LLC CLI remains available through:
+ 
+ ```bash
+ llc-design --help
++python -m llc_design model-compare --help
+ ```
+ 
+ ## Validation status
+diff --git a/SOURCE_README.txt b/SOURCE_README.txt
+index 315db16..84c9098 100644
+--- a/SOURCE_README.txt
++++ b/SOURCE_README.txt
+@@ -1,4 +1,4 @@
+-Power Design Toolkit V7.2 source package
++Power Design Toolkit V8.1 source package
+ 
+ Install core:
+   python -m pip install -e .
+@@ -39,8 +39,16 @@ PFC waveform behavior:
+ 
+ LLC command examples:
+   python -m llc_design waveforms --mode fast --output output/waveforms_fast
++  python -m llc_design waveforms --mode fha --output output/waveforms_fha
++  python -m llc_design waveforms --mode hb --output output/waveforms_hb
+   python -m llc_design waveforms --mode detailed --output output/waveforms_detailed
++  python -m llc_design model-compare --output output/llc_v8_compare
+   python -m llc_design small-signal --sample-us 20 --output output/small_signal
+ 
++V8.1 notes:
++  - FHA, nonlinear multi-harmonic HB and switched periodic TD use one comparison API.
++  - Light-load HB branch fallback is reported explicitly in warnings/diagnostics.
++  - Detailed implementation and current boundaries are in V8_IMPLEMENTATION_NOTES.md.
++
+ Baseline LLC: 400 Vdc -> 53 V / 3 kW, full-bridge LLC + full-bridge SR.
+ MK2166-specific functions are not included.
+diff --git a/TEST_REPORT_V8_1.txt b/TEST_REPORT_V8_1.txt
+new file mode 100644
+index 0000000..8431b35
+--- /dev/null
++++ b/TEST_REPORT_V8_1.txt
+@@ -0,0 +1,249 @@
++Power Design Toolkit / LLC Design Tool V8.1
++Release Candidate Verification Report
++Date: 2026-09-03
++
++======================================================================
++1. RELEASE SCOPE
++======================================================================
++
++Implemented in this package:
++  - V8.0 common LLC multi-fidelity analysis contracts and Golden Waveform layer
++  - V8.1 nonlinear multi-harmonic harmonic-balance solver
++  - Exact rectifier commutation zero-crossing projection for continuous-clamp branch
++  - Explicit regularized fallback at light-load/discontinuous branch transitions
++  - FHA / HB / switched-periodic TD orchestration and error comparison
++  - Common CSV / JSON / Markdown / waveform export
++  - CLI integration: waveforms --mode fha|hb, model-compare
++  - GUI source integration: FHA/HB/TD page and HB waveform command
++  - Full-bridge and half-bridge HB paths
++
++Not claimed as implemented in this release:
++  - V8 enhanced transformer winding/core/parasitic/thermal solver
++  - Nonlinear MOSFET Coss/Qoss commutation model
++  - Digital SR timing/LUT/loss
++  - 2-phase 90-degree and 3-phase 120-degree interleaved LLC pages
++  - Corner/sensitivity/measurement calibration
++
++======================================================================
++2. BUILD ENVIRONMENT
++======================================================================
++
++Python:      3.13.5
++Platform:    Linux 6.18.35 x86_64, glibc 2.41
++NumPy:       2.3.5
++SciPy:       1.17.0
++Matplotlib:  3.10.8
++Pandas:      2.2.3
++Package:     power-design-toolkit 8.1.0
++
++The project declares Python >= 3.10. The release candidate was executed in the
++above environment. Windows and macOS source compatibility is preserved, but
++native GUI execution on those operating systems must be confirmed by the user.
++
++======================================================================
++3. STATIC / SOURCE CHECKS
++======================================================================
++
++[PASS] python -m compileall -q .
++[PASS] git diff --check
++[PASS] llc_design.__version__ == 8.1.0
++[PASS] pyproject.toml version == 8.1.0
++[PASS] wheel contains llc_design/analysis and GUI comparison modules
++[INFO] ruff was not installed in the execution environment; no ruff claim is made.
++
++======================================================================
++4. FULL REPOSITORY TEST RESULT
++======================================================================
++
++Command:
++  python -m pytest -q
++
++Result:
++  Collected:          250
++  Passed:             248
++  Expected xfail:       2
++  Failed:               0
++  Elapsed:          55.55 s
++  Max RSS:        293048 KiB
++
++Suite collection:
++  pfc_design/tests:      146
++  llc_design/tests:       86
++  power_codegen/tests:     3
++  webapp/tests:            7
++  backend/tests:           8
++
++Existing expected-xfail tests:
++  1. backend/tests/test_control_api.py::
++     test_compensator_design_meets_bandwidth_and_phase_margin
++  2. backend/tests/test_control_api.py::
++     test_loop_gain_api_reports_margins
++
++Both xfails document the pre-existing phase-margin limitation of one standalone
++2P2Z stage with the present flat in-band EDF plant. They are unrelated to the
++V8 LLC multi-harmonic implementation.
++
++New V8 test module:
++  llc_design/tests/test_v8_multifidelity.py
++
++V8 regression coverage:
++  - harmonic phasor reconstruction/extraction
++  - exact sign projection and analytical mean(abs(i))
++  - exact regulated HB at full load
++  - nonzero H3/H5 current content
++  - HB power balance and output-node KCL
++  - explicit light-load fallback reporting
++  - full-bridge and half-bridge HB regulation
++  - Golden reference selection
++  - CSV/JSON/Markdown comparison export
++
++======================================================================
++5. DEFAULT 400 V / 53 V / 3 kW NUMERICAL VALIDATION
++======================================================================
++
++Command:
++  python -m llc_design model-compare \
++    --vbus 400 --load 1.0 \
++    --max-harmonic 7 --hb-samples 512 --td-samples 512 \
++    --output <validation-output>
++
++Selected reference:
++  switched_time_domain
++
++FHA:
++  Converged:          PASS
++  Fsw:          99.688762 kHz
++  Vo:           53.000000 V
++  Ir RMS:        9.680411 A
++  Ir RMS error: -6.5825 % relative to switched TD
++  VCr PK error: -6.6269 % relative to switched TD
++
++Nonlinear HB, H1/H3/H5/H7:
++  Converged:          PASS
++  Method: exact_zero_crossing_multi_harmonic_balance
++  Residual:      3.1074e-14
++  Fsw:          99.258907 kHz
++  Vo:           53.000000 V
++  Ir RMS:       10.257447 A
++  Ir RMS error: -1.0141 % relative to switched TD
++  VCr PK error: -0.6790 % relative to switched TD
++  Power-balance error: approximately -3.1e-12 %
++
++Switched periodic TD:
++  Converged:          PASS
++  Method: periodic_shooting_rk4
++  Residual:      3.2380e-12
++  Fsw:          99.665617 kHz
++  Vo:           52.955203 V
++  Ir RMS:       10.362528 A
++  VCr PK:      219.757540 V
++
++CLI elapsed time for the three-model comparison and waveform export:
++  10.12 s
++
++The compact reproducible outputs are included under:
++  release_validation/V8_1_baseline/
++
++======================================================================
++6. HB OPERATING-POINT SMOKE MATRIX
++======================================================================
++
++H1/H3/H5, 256 samples/cycle:
++
++  Full bridge, 300 V, 100 % load:
++    PASS, exact branch, Fsw = 66.7321 kHz, Vo = 53.00000 V
++
++  Full bridge, 360 V, 100 % load:
++    PASS, exact branch, Fsw = 83.8470 kHz, Vo = 53.00000 V
++
++  Full bridge, 420 V, 100 % load:
++    PASS, exact branch, Fsw = 111.1795 kHz, Vo = 53.00000 V
++
++  Full bridge, 400 V, 50 % load:
++    PASS, exact branch, Fsw = 99.3344 kHz, Vo = 53.00000 V
++
++  Full bridge, 400 V, 20 % load:
++    PASS, regularized fallback explicitly flagged,
++    Fsw = 100.4402 kHz, Vo = 53.00000 V
++
++  Half bridge, 400 V, 100 % load, Np = 15:
++    PASS, exact branch, Fsw = 99.2639 kHz, Vo = 53.00000 V
++
++======================================================================
++7. WHEEL BUILD / INSTALL TEST
++======================================================================
++
++Build command:
++  python -m pip wheel . --no-deps --no-build-isolation --wheel-dir dist
++
++Result:
++  [PASS] power_design_toolkit-8.1.0-py3-none-any.whl
++
++SHA-256:
++  d89c67d7829d391633d4e0895c31c8f5e463e7486f2528ccc252fec74e185e4e
++
++Clean target-directory install:
++  [PASS] package imports as version 8.1.0
++  [PASS] installed-wheel H1/H3/H5 HB solve
++  [PASS] exact zero-crossing method
++  [PASS] Vo = 53.000000 V
++
++The first isolated wheel attempt tried to download the declared setuptools
++build dependency and failed because the execution environment has no Internet
++access. Rebuilding with the already-installed local build backend succeeded.
++This was an environment/network issue, not a source-build failure.
++
++======================================================================
++8. GUI STATUS
++======================================================================
++
++[PASS] GUI Python source compile check
++[PASS] GUI source/package contains ModelComparisonView and HB waveform actions
++[NOT EXECUTED] Real Qt window instantiation
++
++Reason:
++  PySide6 is an optional dependency and was not installed in the build
++  environment. Install with:
++
++    python -m pip install -e ".[gui]"
++
++Then launch with:
++
++    python -m llc_design gui
++
++Offline user validation should check:
++  - FHA / HB / TD tab opens
++  - Run button remains responsive through worker thread
++  - table/reference/warnings render correctly
++  - HB waveform page plots all common nodes
++  - Chinese fonts render correctly on Windows
++
++======================================================================
++9. KNOWN NUMERICAL / PHYSICAL BOUNDARIES
++======================================================================
++
++1. Exact HB currently models the ideal continuously clamped full-bridge
++   rectifier/SR branch. Around light-load discontinuous topology transitions,
++   the solver may use the explicitly reported regularized branch.
++
++2. The switched TD reference is the existing ideal-switching periodic model.
++   It is not a nonlinear-Coss or semiconductor-recovery SPICE model.
++
++3. The primary bridge deadtime is represented in bridge/gate waveforms. Full
++   nonlinear Coss/Qoss charge commutation is deferred.
++
++4. Winding capacitance, detailed leakage network, device recovery and the
++   planned V8 magnetic feedback-to-electrical model are deferred.
++
++5. HB/TD agreement is a model cross-check, not a substitute for PLECS/SPICE
++   and hardware correlation once real parasitics are introduced.
++
++======================================================================
++10. RELEASE CONCLUSION
++======================================================================
++
++The V8.0 architecture and V8.1 multi-harmonic/Golden Solver milestone is ready
++for offline engineering evaluation. All repository tests passed except the two
++explicit pre-existing xfails. The numerical core, CLI, exports and wheel were
++executed from the release-candidate source. GUI runtime validation remains for
++a machine with PySide6 and a display environment.
+diff --git a/V8_CHANGELOG.md b/V8_CHANGELOG.md
+new file mode 100644
+index 0000000..8abac30
+--- /dev/null
++++ b/V8_CHANGELOG.md
+@@ -0,0 +1,30 @@
++# V8 Changelog
++
++## V8.1.0 — 2026-09-03
++
++### V8.0 architecture
++
++- Added stable LLC multi-fidelity analysis contracts.
++- Added common convergence, metric, diagnostics and Golden Waveform outputs.
++- Kept the V7 FHA, operating-point, dynamic-phasor and switched modules compatible.
++- Added common model-comparison and export infrastructure.
++
++### V8.1 electrical solver
++
++- Added self-consistent nonlinear odd-harmonic balance.
++- Added exact trigonometric zero-crossing location and analytical rectifier-sign projection.
++- Added smooth continuation seed and explicit light-load regularized fallback diagnostics.
++- Added adaptive harmonic-order convergence.
++- Added FHA/HB/switched-periodic reference selection and signed error metrics.
++- Added periodic output RC-network reconstruction with sample-level KCL consistency.
++- Added CLI `waveforms --mode fha|hb` and `model-compare`.
++- Added GUI FHA/HB/TD comparison page and HB waveform command.
++- Added V8 multi-fidelity regression tests.
++
++### Deferred V8 work
++
++- Magnetic winding/core/parasitic/thermal upgrade.
++- Nonlinear semiconductor capacitance and switching loss.
++- Digital SR timing, LUT and SR loss.
++- Fixed 90° two-phase and fixed 120° three-phase interleaved LLC.
++- Corner, sensitivity and measurement calibration.
+diff --git a/V8_IMPLEMENTATION_NOTES.md b/V8_IMPLEMENTATION_NOTES.md
+new file mode 100644
+index 0000000..b658732
+--- /dev/null
++++ b/V8_IMPLEMENTATION_NOTES.md
+@@ -0,0 +1,275 @@
++# LLC Design Tool V8.0 / V8.1 Implementation Notes
++
++**Version:** 8.1.0  
++**Date:** 2026-09-03  
++**Implemented scope:** V8.0 architecture refactor + V8.1 multi-fidelity electrical solver  
++**Deferred scope:** V8 magnetics enhancement, nonlinear device parasitics, digital SR timing/loss, interleaved LLC and robustness analysis
++
++## 1. Delivery objective
++
++This delivery changes the LLC electrical-analysis core from a collection of model-specific outputs into a stable multi-fidelity interface:
++
++```text
++LLC work-point request
++        │
++        ├── FHA adapter
++        ├── nonlinear multi-harmonic HB
++        └── switched periodic TD adapter
++        │
++        ▼
++common convergence + metrics + Golden Waveform
++        │
++        ├── GUI comparison
++        ├── CLI comparison/export
++        └── future ZVS / SR / magnetics / multiphase modules
++```
++
++The V7 APIs and design pages are retained. V8.1 adds new modules rather than replacing the existing tank, operating-point, dynamic-phasor or switched-model implementations.
++
++## 2. V8.0 common analysis contracts
++
++New package:
++
++```text
++llc_design/analysis/
++```
++
++The central data structures are:
++
++- `LLCAnalysisRequest`: one physical work point, including bus voltage, load fraction, optional fixed frequency, target output voltage and waveform resolution.
++- `FidelityLevel`: `fha`, `harmonic_balance`, `switched_time_domain`.
++- `SolverConvergence`: convergence flag, residual, iteration count, method and message.
++- `ModelMetrics`: common switching frequency, gain, power, phase, current and capacitor-stress metrics.
++- `LLCModelResult`: waveform, metrics, convergence, warnings, diagnostics and native solver result.
++- `MultiFidelityAnalysis`: all enabled results, selected reference fidelity and signed model errors.
++
++This interface is the V8 extension point for later magnetics, SR, ZVS and interleaved engines. Those modules should consume one `LLCModelResult`/Golden Waveform instead of reconstructing separate approximate currents.
++
++## 3. Common Golden Waveform schema
++
++FHA and HB results are reconstructed into the same `WaveformBundle` node set used by existing GUI/export code. Core traces include:
++
++\[
++v_{bridge}(t),\quad i_r(t),\quad v_{Cr}(t),\quad i_m(t),
++\]
++
++\[
++i_{pri,load}(t)=i_r(t)-i_m(t),\quad i_{sec}(t),\quad v_o(t)
++\]
++
++and the existing ideal gate/VDS/SR visualization channels.
++
++The output network is solved as a periodic frequency-domain RC network. Therefore the exported output-node waveforms satisfy, sample by sample within numerical tolerance,
++
++\[
++i_{rect}(t)=i_{load}(t)+i_{Cout}(t)+i_{ESR}(t).
++\]
++
++This replaces a constant-load-current integration shortcut and prevents artificial output-voltage drift in a periodic steady-state waveform.
++
++## 4. FHA adapter
++
++`llc_design/analysis/fha.py` wraps the existing V7 FHA tank and operating-point functions. It remains the fast design model and compatibility baseline.
++
++It supports:
++
++- fixed-frequency evaluation;
++- regulated-frequency solution using the existing operating-point search;
++- common waveform/metrics output;
++- explicit convergence and diagnostics.
++
++No V7 FHA equations were silently changed.
++
++## 5. Nonlinear multi-harmonic harmonic balance
++
++### 5.1 Harmonic state
++
++For selected odd harmonics \(h\in\{1,3,5,\ldots,H_{max}\}\), the solver represents peak complex phasors using
++
++\[
++x(\theta)=\Re\left\{\sum_h X_h e^{jh\theta}\right\}.
++\]
++
++At each harmonic,
++
++\[
++I_{r,h}=\frac{V_{bridge,h}-V_{p,h}}
++{R_s+jh\omega L_r+\frac{1}{jh\omega C_r}},
++\]
++
++\[
++I_{m,h}=\frac{V_{p,h}}{R_m+jh\omega L_m},
++\]
++
++\[
++I_{load,h}=I_{r,h}-I_{m,h}.
++\]
++
++### 5.2 Rectifier self-consistency
++
++The primary-referred rectifier clamp is not assigned independent fixed harmonic amplitudes. It is generated from the polarity of the reconstructed load current:
++
++\[
++v_p(\theta)=n\left(V_o+V_d\right)
++\operatorname{sgn}\!\left(i_{load}(\theta)\right).
++\]
++
++The voltage harmonics \(V_{p,h}\), current harmonics and commutation angles are therefore solved as one nonlinear problem. This avoids the incorrect procedure of independently solving H1/H3/H5/H7 linear circuits and simply adding the results.
++
++The DC output-current balance is enforced simultaneously:
++
++\[
++\frac{1}{2\pi}\int_0^{2\pi}|i_{load}(\theta)|\,d\theta
++=\frac{V_o}{nR_o}
++\]
++
++under the package's primary/secondary current convention.
++
++### 5.3 Exact zero-crossing projection
++
++For the exact continuous-clamp branch, V8.1:
++
++1. reconstructs the finite trigonometric current polynomial;
++2. uses dense samples only to bracket polarity-changing roots;
++3. polishes every crossing with Brent's method;
++4. integrates the Fourier coefficients of `sign(i)` analytically over constant-polarity intervals;
++5. integrates the average absolute current analytically over the same intervals.
++
++This removes FFT-grid quantization from rectifier commutation timing and provides a suitable basis for later SR timing work.
++
++### 5.4 Numerical continuation and fallback
++
++The nonlinear equations are initialized with a smooth `tanh(i/I_smooth)` rectifier projection. The regularized result seeds the exact zero-crossing solve. Harmonic order can be increased adaptively from lower order to the configured maximum.
++
++At light-load/discontinuous topology transitions, the continuously clamped ideal-rectifier equations may cease to describe the physical branch or may have multiple nearby branches. In that case V8.1 can return the regularized solution **only with an explicit warning and diagnostic flag**. It is not labelled as an exact converged zero-crossing solution.
++
++For applications where this fallback is unacceptable, set:
++
++```python
++HarmonicBalanceConfig(allow_regularized_fallback=False)
++```
++
++and handle `HarmonicBalanceConvergenceError`.
++
++## 6. Switched periodic time-domain adapter
++
++`llc_design/analysis/time_domain.py` adapts the existing piecewise switched LLC solver to the common V8 result contract.
++
++It:
++
++- uses the same `LLCAnalysisRequest` and tank data;
++- supports fixed-frequency and regulated operating points;
++- uses the existing periodic-orbit mismatch as its convergence residual;
++- can optionally trim frequency around the seed solution;
++- reconstructs common comparison metrics.
++
++By default the HB and switched models use the resonant-capacitor ESR as the common series-damping baseline. An optional mode can derive switched-model damping from the existing aggregate conductive-loss analysis, but this is disabled for strict model-to-model electrical comparison.
++
++The switched result is the current **ideal-topology** Golden reference. It is not yet a nonlinear-Coss, winding-capacitance or semiconductor-recovery model and must not be presented as SPICE-equivalent.
++
++## 7. Multi-fidelity reference selection
++
++`LLCGoldenSolver` runs the enabled solvers independently. Reference priority is:
++
++```text
++converged switched TD
++    > converged nonlinear HB
++    > converged FHA
++```
++
++A non-converged higher-fidelity trace never silently outranks a converged lower-fidelity result. Solver failures can be preserved as warnings while still returning usable lower-fidelity results; strict mode is available when callers prefer exceptions.
++
++Signed errors are reported for:
++
++- switching frequency;
++- normalized gain;
++- resonant-current RMS/peak;
++- magnetizing-current RMS;
++- secondary-current RMS;
++- resonant-capacitor peak voltage.
++
++## 8. CLI
++
++### 8.1 HB waveform
++
++```bash
++python -m llc_design waveforms \
++    --mode hb \
++    --samples 1024 \
++    --cycles 2 \
++    --output output/llc_hb
++```
++
++### 8.2 FHA/HB/TD comparison
++
++```bash
++python -m llc_design model-compare \
++    --vbus 400 \
++    --load 1.0 \
++    --max-harmonic 7 \
++    --hb-samples 1024 \
++    --td-samples 1024 \
++    --output output/llc_v8_compare
++```
++
++Use `--skip-td` for a faster FHA/HB comparison. Use `--frequency` to evaluate all models at a fixed switching frequency instead of allowing each model to regulate independently.
++
++The output directory contains:
++
++- `model_comparison.csv`;
++- `model_comparison.json`;
++- `LLC_V8_model_comparison.md`;
++- optional per-model waveform CSV/statistics/PNG/report files.
++
++## 9. GUI
++
++The LLC main window adds:
++
++- a dedicated **FHA / HB / TD** tab;
++- bus voltage, load, harmonic order, HB sample count and TD inclusion controls;
++- convergence/reference/error table;
++- solver warnings and diagnostics;
++- a **多谐波 HB 波形** action in the waveform page and parameter dock.
++
++The existing dynamic-phasor and detailed switched waveform modes remain available.
++
++## 10. Regression tests added
++
++`llc_design/tests/test_v8_multifidelity.py` validates:
++
++1. harmonic phasor synthesis/extraction round-trip;
++2. exact sign projection for a pure sine, including the expected \(4/\pi\) fundamental and \(2I_{pk}/\pi\) average absolute value;
++3. full-load regulated exact HB convergence, H3/H5 content, output power balance and output-node KCL;
++4. explicit light-load regularized-fallback reporting;
++5. full-bridge and half-bridge HB regulation paths;
++6. Golden reference selection and comparison export.
++
++The final package also contains `TEST_REPORT_V8_1.txt` generated from the release-candidate build.
++
++## 11. Known boundaries
++
++The following are deliberately **not** claimed as completed in V8.1:
++
++- nonlinear `Coss(V)`, `Qoss(V)` and deadtime commutation dynamics;
++- transformer winding/interwinding capacitance and full leakage network;
++- diode reverse recovery or SR MOSFET third-quadrant device model;
++- discontinuous-rectifier complementarity/state-machine HB branch;
++- the planned V8 high-frequency winding/core-loss model;
++- SR timing/LUT/loss;
++- two-phase 90° and three-phase 120° interleaved LLC pages;
++- corner/sensitivity/measurement calibration.
++
++These are later V8 stages and should consume the V8.0 common result/waveform interface.
++
++## 12. Recommended next stage
++
++The next implementation stage is the agreed V8 magnetics work:
++
++1. derive primary and secondary harmonic current spectra directly from the Golden Waveform;
++2. establish validated conductor geometry and winding-stack data structures;
++3. implement DC resistance plus skin/proximity loss for round wire, Litz, foil and planar conductors;
++4. improve nonsinusoidal core-loss calculation from actual \(B(t)\);
++5. add leakage, winding capacitance, gap-fringing and lumped thermal models;
++6. close the loop by feeding extracted parasitics back into the electrical solver.
++
++This order prevents the magnetic-loss module from depending on a separate approximate sinusoidal current model.
+diff --git a/llc_design/__init__.py b/llc_design/__init__.py
+index c620c7d..845b9e7 100644
+--- a/llc_design/__init__.py
++++ b/llc_design/__init__.py
+@@ -1,3 +1,3 @@
+ """LLC half/full-bridge resonant converter design and optimization tool."""
+ 
+-__version__ = "7.5.0"
++__version__ = "8.1.0"
+diff --git a/llc_design/__main__.py b/llc_design/__main__.py
+index 86646bc..1c08ecb 100644
+--- a/llc_design/__main__.py
++++ b/llc_design/__main__.py
+@@ -7,6 +7,16 @@ from dataclasses import replace
+ 
+ import click
+ 
++from .analysis import (
++    GoldenSolverConfig,
++    HarmonicBalanceConfig,
++    LLCAnalysisRequest,
++    LLCGoldenSolver,
++    TimeDomainConfig,
++    export_multifidelity_analysis,
++    solve_fha,
++    solve_harmonic_balance,
++)
+ from .core.config import load_spec, save_spec
+ from .core.spec import LLCDesignSpec, PrimaryTopology
+ from .core.tank import GainNotReachableError
+@@ -182,7 +192,13 @@ def run(config, vbus, vout, pout, fr_khz, fmin_khz, fmax_khz, ln, q_full,
+ @click.option("--vbus", type=float, default=None, help="DC bus voltage for the waveform work point")
+ @click.option("--load", "load_fraction", type=float, default=1.0, show_default=True,
+               help="Load fraction, 1.0 = rated power")
+-@click.option("--mode", type=click.Choice(["fast", "detailed"]), default="fast", show_default=True)
++@click.option(
++    "--mode",
++    type=click.Choice(["fast", "fha", "hb", "detailed"]),
++    default="fast",
++    show_default=True,
++    help="fast=dynamic-phasor, fha=fundamental only, hb=multi-harmonic, detailed=switched TD",
++)
+ @click.option("--cycles", type=int, default=2, show_default=True)
+ @click.option("--samples", type=int, default=512, show_default=True,
+               help="Samples per switching cycle")
+@@ -191,30 +207,54 @@ def run(config, vbus, vout, pout, fr_khz, fmin_khz, fmax_khz, ln, q_full,
+ def waveforms(config, vbus, load_fraction, mode, cycles, samples, output):
+     """Generate synchronized LLC key-node voltage/current waveforms."""
+     spec = _base_spec(config)
+-    system = LLCSystemAnalyzer().analyze(spec)
+-    small = build_small_signal_analysis(
+-        spec,
+-        vbus_v=spec.vbus_nom_v if vbus is None else vbus,
+-        load_fraction=load_fraction,
+-        system_analysis=system,
+-    )
+-    model = DynamicPhasorModel(small.parameters)
+-    if mode == "fast":
+-        bundle = reconstruct_dynamic_phasor_waveforms(
+-            model, small.steady_state,
+-            cycles=cycles, samples_per_cycle=samples)
++    bus_voltage = spec.vbus_nom_v if vbus is None else float(vbus)
++    if mode in {"fha", "hb"}:
++        request = LLCAnalysisRequest(
++            spec=spec,
++            vbus_v=bus_voltage,
++            load_fraction=load_fraction,
++            waveform_cycles=cycles,
++            samples_per_cycle=max(samples, 256 if mode == "hb" else 128),
++        )
++        if mode == "fha":
++            result = solve_fha(request)
++        else:
++            result = solve_harmonic_balance(
++                request,
++                HarmonicBalanceConfig(
++                    max_harmonic=7,
++                    samples_per_cycle=max(samples, 256),
++                    output_cycles=cycles,
++                ),
++            )
++        bundle = result.waveform
++        work_frequency_hz = result.metrics.switching_frequency_hz
+     else:
+-        bundle = simulate_switched_steady_state(
+-            model, small.steady_state,
+-            SwitchedSimulationConfig(
+-                samples_per_cycle=samples,
+-                output_cycles=cycles,
+-            ),
++        system = LLCSystemAnalyzer().analyze(spec)
++        small = build_small_signal_analysis(
++            spec,
++            vbus_v=bus_voltage,
++            load_fraction=load_fraction,
++            system_analysis=system,
+         )
++        model = DynamicPhasorModel(small.parameters)
++        if mode == "fast":
++            bundle = reconstruct_dynamic_phasor_waveforms(
++                model, small.steady_state,
++                cycles=cycles, samples_per_cycle=samples)
++        else:
++            bundle = simulate_switched_steady_state(
++                model, small.steady_state,
++                SwitchedSimulationConfig(
++                    samples_per_cycle=samples,
++                    output_cycles=cycles,
++                ),
++            )
++        work_frequency_hz = small.operating_point.switching_frequency_hz
+     paths = export_waveform_bundle(bundle, output)
+     click.echo(f"Waveform model: {bundle.model_name}")
+-    click.echo(f"Work point: {small.operating_point.vbus_v:.1f} V / {load_fraction*100:.1f}% / "
+-               f"{small.operating_point.switching_frequency_hz/1e3:.3f} kHz")
++    click.echo(f"Work point: {bus_voltage:.1f} V / {load_fraction*100:.1f}% / "
++               f"{work_frequency_hz/1e3:.3f} kHz")
+     for key in ("i_resonant", "v_resonant_cap", "i_transformer_secondary", "i_output_cap", "v_output"):
+         signal = bundle.signals[key]
+         stats = signal.statistics
+@@ -223,6 +263,76 @@ def waveforms(config, vbus, load_fraction, mode, cycles, samples, output):
+     click.echo(f"Report: {paths['report']}")
+ 
+ 
++@cli.command("model-compare")
++@click.option("--config", type=click.Path(exists=True, dir_okay=False), default=None)
++@click.option("--vbus", type=float, default=None, help="DC bus voltage")
++@click.option("--load", "load_fraction", type=float, default=1.0, show_default=True)
++@click.option("--fixed-frequency-khz", type=float, default=None,
++              help="Compare all models at one frequency instead of independently regulating Vo")
++@click.option("--max-harmonic", type=int, default=7, show_default=True)
++@click.option("--hb-samples", type=int, default=1024, show_default=True)
++@click.option("--td-samples", type=int, default=512, show_default=True)
++@click.option("--skip-td", is_flag=True, default=False,
++              help="Run FHA/HB only; useful for rapid sweeps")
++@click.option("--system-loss-damping", is_flag=True, default=False,
++              help="Use the existing complete loss model to calibrate TD series damping")
++@click.option("--output", type=click.Path(file_okay=False),
++              default="output/llc_v8_model_compare", show_default=True)
++def model_compare(config, vbus, load_fraction, fixed_frequency_khz,
++                  max_harmonic, hb_samples, td_samples, skip_td,
++                  system_loss_damping, output):
++    """Run V8 FHA / nonlinear multi-harmonic / switched-TD comparison."""
++    spec = _base_spec(config)
++    if max_harmonic < 1:
++        raise click.ClickException("max-harmonic must be >= 1")
++    if max_harmonic % 2 == 0:
++        raise click.ClickException("max-harmonic must be odd")
++    frequency_hz = (
++        None if fixed_frequency_khz is None
++        else fixed_frequency_khz * 1e3
++    )
++    request = LLCAnalysisRequest(
++        spec=spec,
++        vbus_v=spec.vbus_nom_v if vbus is None else vbus,
++        load_fraction=load_fraction,
++        frequency_hz=frequency_hz,
++        regulate_output=frequency_hz is None,
++        waveform_cycles=2,
++        samples_per_cycle=max(hb_samples, 256),
++    )
++    solver = LLCGoldenSolver(GoldenSolverConfig(
++        include_time_domain=not skip_td,
++        harmonic_balance=HarmonicBalanceConfig(
++            max_harmonic=max_harmonic,
++            samples_per_cycle=max(hb_samples, 256),
++            output_cycles=2,
++        ),
++        time_domain=TimeDomainConfig(
++            samples_per_cycle=max(td_samples, 128),
++            output_cycles=2,
++            retry_samples_per_cycle=max(td_samples, 512),
++        ),
++        derive_time_domain_damping_from_system_loss=system_loss_damping,
++    ))
++    analysis = solver.solve(request)
++    paths = export_multifidelity_analysis(analysis, output)
++    click.echo("LLC V8 multi-fidelity comparison")
++    click.echo(f"  Reference: {analysis.reference_level.value}")
++    for row in analysis.comparison_rows:
++        metrics = row.metrics
++        click.echo(
++            f"  {row.fidelity.value:22s} "
++            f"{'PASS' if row.converged else 'FAIL':4s} "
++            f"fs={metrics.switching_frequency_hz/1e3:10.5f} kHz  "
++            f"Vo={metrics.output_voltage_v:9.5f} V  "
++            f"Ir_rms={metrics.resonant_current_rms_a:9.5f} A  "
++            f"dIr={row.resonant_rms_error_percent:+8.3f}%"
++        )
++    for warning in analysis.warnings:
++        click.echo(f"  WARNING: {warning}")
++    click.echo(f"  Report: {paths['report']}")
++
++
+ @cli.command("small-signal")
+ @click.option("--config", type=click.Path(exists=True, dir_okay=False), default=None)
+ @click.option("--vbus", type=float, default=None, help="DC bus voltage for linearization")
+diff --git a/llc_design/analysis/__init__.py b/llc_design/analysis/__init__.py
+new file mode 100644
+index 0000000..a79b86b
+--- /dev/null
++++ b/llc_design/analysis/__init__.py
+@@ -0,0 +1,58 @@
++"""V8 multi-fidelity LLC steady-state analysis package."""
++
++from .export import export_multifidelity_analysis, write_multifidelity_markdown
++from .fha import solve_fha
++from .golden import GoldenSolverConfig, LLCGoldenSolver, solve_multifidelity
++from .harmonic_balance import (
++    HarmonicBalanceConfig,
++    HarmonicBalanceConvergenceError,
++    HarmonicBalanceNativeSolution,
++    HarmonicConvergenceStep,
++    MultiHarmonicLLCSolver,
++    exact_rectifier_projection,
++    extract_peak_phasors,
++    find_trigonometric_zero_crossings,
++    odd_harmonics,
++    solve_harmonic_balance,
++    synthesize_real_waveform,
++)
++from .time_domain import TimeDomainConfig, TimeDomainNativeSolution, solve_time_domain
++from .types import (
++    FidelityLevel,
++    LLCAnalysisRequest,
++    LLCModelResult,
++    ModelComparisonRow,
++    ModelMetrics,
++    MultiFidelityAnalysis,
++    SolverConvergence,
++)
++
++__all__ = [
++    "FidelityLevel",
++    "GoldenSolverConfig",
++    "HarmonicBalanceConfig",
++    "HarmonicBalanceConvergenceError",
++    "HarmonicBalanceNativeSolution",
++    "HarmonicConvergenceStep",
++    "LLCAnalysisRequest",
++    "LLCGoldenSolver",
++    "LLCModelResult",
++    "ModelComparisonRow",
++    "ModelMetrics",
++    "MultiFidelityAnalysis",
++    "MultiHarmonicLLCSolver",
++    "SolverConvergence",
++    "TimeDomainConfig",
++    "TimeDomainNativeSolution",
++    "exact_rectifier_projection",
++    "export_multifidelity_analysis",
++    "extract_peak_phasors",
++    "find_trigonometric_zero_crossings",
++    "odd_harmonics",
++    "solve_fha",
++    "solve_harmonic_balance",
++    "solve_multifidelity",
++    "solve_time_domain",
++    "synthesize_real_waveform",
++    "write_multifidelity_markdown",
++]
+diff --git a/llc_design/analysis/export.py b/llc_design/analysis/export.py
+new file mode 100644
+index 0000000..098a654
+--- /dev/null
++++ b/llc_design/analysis/export.py
+@@ -0,0 +1,211 @@
++"""Export V8 multi-fidelity LLC analysis results."""
++
++from __future__ import annotations
++
++import csv
++from dataclasses import asdict
++import json
++from pathlib import Path
++from typing import Any
++
++import numpy as np
++
++from .types import FidelityLevel, MultiFidelityAnalysis
++from ..dynamics.export import export_waveform_bundle
++
++
++def _jsonable(value: Any) -> Any:
++    if isinstance(value, FidelityLevel):
++        return value.value
++    if isinstance(value, np.ndarray):
++        if np.iscomplexobj(value):
++            return [
++                {"real": float(item.real), "imag": float(item.imag)}
++                for item in value
++            ]
++        return value.tolist()
++    if isinstance(value, (np.floating, np.integer)):
++        return value.item()
++    if isinstance(value, dict):
++        return {str(key): _jsonable(item) for key, item in value.items()}
++    if isinstance(value, (list, tuple)):
++        return [_jsonable(item) for item in value]
++    return value
++
++
++def _comparison_header() -> tuple[str, ...]:
++    return (
++        "model",
++        "reference",
++        "converged",
++        "residual_norm",
++        "switching_frequency_hz",
++        "output_voltage_v",
++        "output_power_w",
++        "normalized_gain",
++        "input_phase_deg",
++        "resonant_current_rms_a",
++        "resonant_current_peak_a",
++        "magnetizing_current_rms_a",
++        "secondary_current_rms_a",
++        "resonant_capacitor_peak_v",
++        "power_balance_error_percent",
++        "frequency_error_percent",
++        "gain_error_percent",
++        "resonant_rms_error_percent",
++        "resonant_peak_error_percent",
++        "magnetizing_rms_error_percent",
++        "secondary_rms_error_percent",
++        "resonant_cap_peak_error_percent",
++    )
++
++
++def _comparison_record(
++    analysis: MultiFidelityAnalysis,
++    row,
++) -> dict[str, Any]:
++    metrics = row.metrics
++    return {
++        "model": row.fidelity.value,
++        "reference": row.fidelity is analysis.reference_level,
++        "converged": row.converged,
++        "residual_norm": row.residual_norm,
++        "switching_frequency_hz": metrics.switching_frequency_hz,
++        "output_voltage_v": metrics.output_voltage_v,
++        "output_power_w": metrics.output_power_w,
++        "normalized_gain": metrics.normalized_gain,
++        "input_phase_deg": metrics.input_phase_deg,
++        "resonant_current_rms_a": metrics.resonant_current_rms_a,
++        "resonant_current_peak_a": metrics.resonant_current_peak_a,
++        "magnetizing_current_rms_a": metrics.magnetizing_current_rms_a,
++        "secondary_current_rms_a": metrics.secondary_current_rms_a,
++        "resonant_capacitor_peak_v": metrics.resonant_capacitor_peak_v,
++        "power_balance_error_percent": metrics.power_balance_error_percent,
++        "frequency_error_percent": row.frequency_error_percent,
++        "gain_error_percent": row.gain_error_percent,
++        "resonant_rms_error_percent": row.resonant_rms_error_percent,
++        "resonant_peak_error_percent": row.resonant_peak_error_percent,
++        "magnetizing_rms_error_percent": row.magnetizing_rms_error_percent,
++        "secondary_rms_error_percent": row.secondary_rms_error_percent,
++        "resonant_cap_peak_error_percent": row.resonant_cap_peak_error_percent,
++    }
++
++
++def write_multifidelity_markdown(
++    analysis: MultiFidelityAnalysis,
++    path: str | Path,
++) -> Path:
++    output = Path(path)
++    request = analysis.request
++    lines = [
++        "# LLC V8 多保真模型对比计算书",
++        "",
++        "> 模型层级：FHA 快速设计、多谐波谐波平衡、理想开关分段时域。",
++        "",
++        "## 工作点",
++        "",
++        f"- 母线电压：{request.bus_voltage_v:.6g} V",
++        f"- 目标输出：{request.output_voltage_target_v:.6g} V",
++        f"- 负载：{request.load_fraction*100:.3f}% / {request.requested_output_power_w:.6g} W",
++        f"- 比较参考：`{analysis.reference_level.value}`",
++        "",
++        "## 模型结果",
++        "",
++        "| 模型 | 收敛 | Fsw/kHz | Vo/V | Gain | Ir RMS/A | Ir PK/A | Im RMS/A | Is RMS/A | VCr PK/V | ΔIr RMS/% | ΔVCr PK/% |",
++        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
++    ]
++    for row in analysis.comparison_rows:
++        metrics = row.metrics
++        marker = " **REF**" if row.fidelity is analysis.reference_level else ""
++        lines.append(
++            f"| {row.fidelity.value}{marker} | {'PASS' if row.converged else 'FAIL'} | "
++            f"{metrics.switching_frequency_hz/1e3:.6f} | {metrics.output_voltage_v:.6f} | "
++            f"{metrics.normalized_gain:.8f} | {metrics.resonant_current_rms_a:.6f} | "
++            f"{metrics.resonant_current_peak_a:.6f} | {metrics.magnetizing_current_rms_a:.6f} | "
++            f"{metrics.secondary_current_rms_a:.6f} | {metrics.resonant_capacitor_peak_v:.6f} | "
++            f"{row.resonant_rms_error_percent:.4f} | {row.resonant_cap_peak_error_percent:.4f} |"
++        )
++
++    lines.extend(["", "## 收敛与模型边界", ""])
++    for level, result in analysis.results.items():
++        lines.append(
++            f"- `{level.value}`：converged={result.convergence.converged}，"
++            f"residual={result.convergence.residual_norm:.6e}，"
++            f"method=`{result.convergence.method}`"
++        )
++        if result.harmonic_orders:
++            lines.append(
++                "  - 谐波阶次：" + ", ".join(str(item) for item in result.harmonic_orders)
++            )
++        for warning in result.warnings:
++            lines.append(f"  - {warning}")
++    for warning in analysis.warnings:
++        lines.append(f"- 系统提示：{warning}")
++
++    lines.extend(["", "## 文件结构", ""])
++    for level in analysis.results:
++        lines.append(f"- `{level.value}/`：该模型的同步波形 CSV、统计、图表和单模型报告。")
++    output.parent.mkdir(parents=True, exist_ok=True)
++    output.write_text("\n".join(lines), encoding="utf-8")
++    return output
++
++
++def export_multifidelity_analysis(
++    analysis: MultiFidelityAnalysis,
++    directory: str | Path,
++    *,
++    export_model_waveforms: bool = True,
++) -> dict[str, Path]:
++    """Export comparison CSV/JSON/Markdown and optional per-model waveforms."""
++
++    output = Path(directory)
++    output.mkdir(parents=True, exist_ok=True)
++    paths: dict[str, Path] = {}
++
++    records = [_comparison_record(analysis, row) for row in analysis.comparison_rows]
++    comparison_csv = output / "model_comparison.csv"
++    with comparison_csv.open("w", encoding="utf-8-sig", newline="") as handle:
++        writer = csv.DictWriter(handle, fieldnames=_comparison_header())
++        writer.writeheader()
++        writer.writerows(records)
++    paths["comparison_csv"] = comparison_csv
++
++    payload = {
++        "request": {
++            "vbus_v": analysis.request.bus_voltage_v,
++            "target_output_voltage_v": analysis.request.output_voltage_target_v,
++            "load_fraction": analysis.request.load_fraction,
++            "requested_output_power_w": analysis.request.requested_output_power_w,
++            "frequency_hz": analysis.request.frequency_hz,
++            "regulate_output": analysis.request.regulate_output,
++        },
++        "reference_level": analysis.reference_level.value,
++        "warnings": list(analysis.warnings),
++        "comparison": records,
++        "models": {
++            level.value: {
++                "metrics": result.metrics.as_dict(),
++                "convergence": asdict(result.convergence),
++                "harmonic_orders": list(result.harmonic_orders),
++                "warnings": list(result.warnings),
++                "diagnostics": _jsonable(dict(result.diagnostics)),
++            }
++            for level, result in analysis.results.items()
++        },
++    }
++    summary_json = output / "model_comparison.json"
++    summary_json.write_text(
++        json.dumps(_jsonable(payload), ensure_ascii=False, indent=2),
++        encoding="utf-8",
++    )
++    paths["summary_json"] = summary_json
++    paths["report"] = write_multifidelity_markdown(
++        analysis, output / "LLC_V8_model_comparison.md")
++
++    if export_model_waveforms:
++        for level, result in analysis.results.items():
++            model_paths = export_waveform_bundle(
++                result.waveform, output / level.value)
++            for key, path in model_paths.items():
++                paths[f"{level.value}_{key}"] = path
++    return paths
+diff --git a/llc_design/analysis/fha.py b/llc_design/analysis/fha.py
+new file mode 100644
+index 0000000..b2d19e8
+--- /dev/null
++++ b/llc_design/analysis/fha.py
+@@ -0,0 +1,207 @@
++"""V8 adapter around the established first-harmonic LLC model."""
++
++from __future__ import annotations
++
++import math
++
++import numpy as np
++from scipy.optimize import minimize_scalar, root_scalar
++
++from .metrics import metrics_from_waveform
++from .types import (
++    FidelityLevel,
++    LLCAnalysisRequest,
++    LLCModelResult,
++    SolverConvergence,
++)
++from .waveform import build_standard_waveform_bundle
++from ..core.operating_point import LLCOperatingPoint, solve_operating_point
++from ..core.tank import (
++    TankDesign,
++    design_tank,
++    equivalent_ac_load_ohm,
++    gain,
++    tank_state,
++)
++from ..dynamics.waveforms import deadtime_bridge_square
++
++
++FOUR_OVER_PI = 4.0 / math.pi
++
++
++def _load_rac(turns_ratio: float, output_voltage_v: float, drop_v: float,
++              load_resistance_ohm: float) -> float:
++    """Return FHA Rac for a resistive DC load including a constant SR drop."""
++
++    voltage = max(output_voltage_v, 1e-9)
++    pout = voltage * voltage / load_resistance_ohm
++    transferred = pout * (1.0 + drop_v / voltage)
++    return equivalent_ac_load_ohm(
++        turns_ratio, voltage + drop_v, max(transferred, 1e-12))
++
++
++def _fixed_frequency_output(
++    request: LLCAnalysisRequest,
++    tank: TankDesign,
++    frequency_hz: float,
++) -> tuple[float, float]:
++    """Solve the FHA output voltage at fixed frequency and fixed DC load."""
++
++    spec = request.spec
++    level = spec.bridge_gain * request.bus_voltage_v
++    rload = request.load_resistance_ohm
++    drop = spec.rectifier_equivalent_drop_v
++    target = request.output_voltage_target_v
++    upper = max(4.0 * target, 2.5 * level / spec.turns_ratio, 10.0)
++
++    def residual(vout: float) -> float:
++        rac = _load_rac(spec.turns_ratio, vout, drop, rload)
++        predicted = gain(tank, frequency_hz, rac) * level / spec.turns_ratio - drop
++        return predicted - vout
++
++    grid = np.linspace(max(1e-3, 0.001 * target), upper, 181)
++    values = [residual(float(value)) for value in grid]
++    roots: list[float] = []
++    for v0, v1, e0, e1 in zip(grid[:-1], grid[1:], values[:-1], values[1:]):
++        if abs(e0) < 1e-10:
++            roots.append(float(v0))
++        if e0 * e1 < 0.0:
++            result = root_scalar(residual, bracket=(float(v0), float(v1)), method="brentq")
++            if result.converged:
++                roots.append(float(result.root))
++    if roots:
++        vout = min(roots, key=lambda value: abs(value - target))
++    else:
++        result = minimize_scalar(
++            lambda value: abs(residual(float(value))),
++            bounds=(float(grid[0]), upper),
++            method="bounded",
++        )
++        vout = float(result.x)
++    return vout, _load_rac(spec.turns_ratio, vout, drop, rload)
++
++
++def _phasor_waveforms(
++    request: LLCAnalysisRequest,
++    tank: TankDesign,
++    frequency_hz: float,
++    output_voltage_v: float,
++    rac_ohm: float,
++) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
++    """Reconstruct standard FHA resonant-state and clamp waveforms."""
++
++    spec = request.spec
++    total_samples = request.waveform_cycles * request.samples_per_cycle
++    time_s = np.arange(total_samples, dtype=float) / (
++        frequency_hz * request.samples_per_cycle)
++    phase = 2.0 * math.pi * frequency_hz * time_s
++    level = spec.bridge_gain * request.bus_voltage_v
++    bridge = deadtime_bridge_square(
++        phase, level, spec.primary_deadtime_s * frequency_hz)
++
++    omega = 2.0 * math.pi * frequency_hz
++    state = tank_state(tank, frequency_hz, rac_ohm)
++    # Re{X exp(j theta)} convention.  A positive sine is represented by -jA.
++    bridge_fundamental_peak = complex(0.0, -FOUR_OVER_PI * level)
++    ir_phasor = bridge_fundamental_peak / state.z_input_ohm
++    vp_phasor = ir_phasor * state.z_parallel_ohm
++    im_phasor = vp_phasor / (1j * omega * tank.lm_h)
++    vcr_phasor = ir_phasor / (1j * omega * tank.cr_f)
++
++    carrier = np.exp(1j * phase)
++    ir = np.real(ir_phasor * carrier)
++    im = np.real(im_phasor * carrier)
++    vcr = np.real(vcr_phasor * carrier)
++    primary_load = ir - im
++    polarity = np.where(primary_load >= 0.0, 1.0, -1.0)
++    vp = spec.turns_ratio * (
++        output_voltage_v + spec.rectifier_equivalent_drop_v
++    ) * polarity
++    return time_s, bridge, ir, vcr, im, vp
++
++
++def solve_fha(request: LLCAnalysisRequest) -> LLCModelResult:
++    """Solve one work point with the existing FHA design model."""
++
++    request.validate()
++    spec = request.spec
++    tank = design_tank(spec)
++    op: LLCOperatingPoint | None = None
++    if request.regulate_output and request.frequency_hz is None:
++        op = solve_operating_point(
++            spec, tank, request.bus_voltage_v, request.load_fraction)
++        frequency_hz = op.switching_frequency_hz
++        output_voltage_v = request.output_voltage_target_v
++        rac_ohm = op.rac_ohm
++        input_phase_deg = op.input_phase_deg
++    else:
++        frequency_hz = (
++            request.frequency_hz
++            if request.frequency_hz is not None
++            else spec.resonant_frequency_hz
++        )
++        output_voltage_v, rac_ohm = _fixed_frequency_output(
++            request, tank, frequency_hz)
++        input_phase_deg = tank_state(tank, frequency_hz, rac_ohm).input_phase_deg
++
++    time_s, bridge, ir, vcr, im, vp = _phasor_waveforms(
++        request, tank, frequency_hz, output_voltage_v, rac_ohm)
++    bundle = build_standard_waveform_bundle(
++        time_s=time_s,
++        switching_frequency_hz=frequency_hz,
++        model_name="fha_v8_fast",
++        bus_voltage_v=request.bus_voltage_v,
++        primary_topology=spec.primary_topology.value,
++        primary_deadtime_s=spec.primary_deadtime_s,
++        turns_ratio=spec.turns_ratio,
++        load_resistance_ohm=request.load_resistance_ohm,
++        output_capacitance_f=spec.output_capacitance_f,
++        output_cap_esr_ohm=spec.output_cap_esr_ohm,
++        series_resistance_ohm=0.0,
++        resonant_inductance_h=tank.lr_h,
++        output_voltage_mean_v=output_voltage_v,
++        bridge_voltage_v=bridge,
++        resonant_current_a=ir,
++        resonant_capacitor_voltage_v=vcr,
++        magnetizing_current_a=im,
++        transformer_primary_voltage_v=vp,
++        warnings=(
++            "FHA retains only the fundamental resonant-state components.",
++            "Deadtime is displayed in bridge/gate traces but is not included in the FHA phasor solution.",
++        ),
++        metadata={
++            "rac_ohm": rac_ohm,
++            "regulated": str(request.regulate_output and request.frequency_hz is None),
++            "harmonic_order": 1,
++        },
++    )
++    normalized_gain = (
++        spec.turns_ratio * (output_voltage_v + spec.rectifier_equivalent_drop_v)
++        / (spec.bridge_gain * request.bus_voltage_v)
++    )
++    metrics = metrics_from_waveform(
++        request,
++        bundle,
++        input_phase_deg=input_phase_deg,
++        normalized_gain=normalized_gain,
++    )
++    return LLCModelResult(
++        fidelity=FidelityLevel.FHA,
++        request=request,
++        waveform=bundle,
++        metrics=metrics,
++        convergence=SolverConvergence(
++            converged=True,
++            residual_norm=0.0,
++            iterations=1,
++            method="closed_form_fha",
++            message="FHA analytical solution",
++        ),
++        harmonic_orders=(1,),
++        warnings=bundle.warnings,
++        diagnostics={
++            "rac_ohm": rac_ohm,
++            "normalized_frequency": frequency_hz / tank.fr_hz,
++        },
++        native_result=op,
++    )
+diff --git a/llc_design/analysis/golden.py b/llc_design/analysis/golden.py
+new file mode 100644
+index 0000000..5aabd7b
+--- /dev/null
++++ b/llc_design/analysis/golden.py
+@@ -0,0 +1,247 @@
++"""V8 multi-fidelity orchestration for one LLC steady-state work point.
++
++The orchestrator deliberately keeps the three solver layers independent:
++
++* FHA is the fast design model and backward-compatible baseline.
++* Multi-harmonic balance is the nonlinear frequency-domain verification layer.
++* The switched periodic solver is the current ideal-topology Golden reference.
++
++A failed high-fidelity solve does not erase lower-fidelity engineering results.
++The highest *converged* available result is selected as the comparison reference,
++unless strict mode is requested.
++"""
++
++from __future__ import annotations
++
++from dataclasses import dataclass, field
++from typing import Mapping
++
++from .fha import solve_fha
++from .harmonic_balance import (
++    HarmonicBalanceConfig,
++    HarmonicBalanceConvergenceError,
++    solve_harmonic_balance,
++)
++from .metrics import relative_error_percent
++from .time_domain import TimeDomainConfig, solve_time_domain
++from .types import (
++    FidelityLevel,
++    LLCAnalysisRequest,
++    LLCModelResult,
++    ModelComparisonRow,
++    MultiFidelityAnalysis,
++)
++from ..core.tank import TankDesign, design_tank
++from ..models.system import LLCSystemAnalyzer, SystemAnalysis
++
++
++@dataclass(frozen=True)
++class GoldenSolverConfig:
++    """Configuration for FHA/HB/switched-model orchestration."""
++
++    include_fha: bool = True
++    include_harmonic_balance: bool = True
++    include_time_domain: bool = True
++    harmonic_balance: HarmonicBalanceConfig = field(
++        default_factory=HarmonicBalanceConfig)
++    time_domain: TimeDomainConfig = field(default_factory=TimeDomainConfig)
++    derive_time_domain_damping_from_system_loss: bool = False
++    strict: bool = False
++
++    def validate(self) -> None:
++        if not (
++            self.include_fha
++            or self.include_harmonic_balance
++            or self.include_time_domain
++        ):
++            raise ValueError("at least one LLC fidelity level must be enabled")
++        self.harmonic_balance.validate()
++        self.time_domain.validate()
++
++
++class LLCGoldenSolver:
++    """Solve and compare the enabled V8 steady-state model fidelities."""
++
++    def __init__(self, config: GoldenSolverConfig | None = None):
++        self.config = config or GoldenSolverConfig()
++        self.config.validate()
++
++    @staticmethod
++    def _reference_level(
++        results: Mapping[FidelityLevel, LLCModelResult],
++    ) -> FidelityLevel:
++        priority = (
++            FidelityLevel.SWITCHED_TIME_DOMAIN,
++            FidelityLevel.HARMONIC_BALANCE,
++            FidelityLevel.FHA,
++        )
++        for level in priority:
++            result = results.get(level)
++            if result is not None and result.convergence.converged:
++                return level
++        # A non-converged switched orbit can still carry useful traces, but it
++        # must never silently outrank a converged lower-fidelity result.
++        for level in priority:
++            if level in results:
++                return level
++        raise RuntimeError("multi-fidelity analysis produced no model result")
++
++    @staticmethod
++    def _comparison_rows(
++        results: Mapping[FidelityLevel, LLCModelResult],
++        reference_level: FidelityLevel,
++    ) -> tuple[ModelComparisonRow, ...]:
++        reference = results[reference_level].metrics
++        order = (
++            FidelityLevel.FHA,
++            FidelityLevel.HARMONIC_BALANCE,
++            FidelityLevel.SWITCHED_TIME_DOMAIN,
++        )
++        rows: list[ModelComparisonRow] = []
++        for level in order:
++            result = results.get(level)
++            if result is None:
++                continue
++            metrics = result.metrics
++            rows.append(ModelComparisonRow(
++                fidelity=level,
++                metrics=metrics,
++                converged=result.convergence.converged,
++                residual_norm=result.convergence.residual_norm,
++                frequency_error_percent=relative_error_percent(
++                    metrics.switching_frequency_hz,
++                    reference.switching_frequency_hz,
++                ),
++                gain_error_percent=relative_error_percent(
++                    metrics.normalized_gain,
++                    reference.normalized_gain,
++                ),
++                resonant_rms_error_percent=relative_error_percent(
++                    metrics.resonant_current_rms_a,
++                    reference.resonant_current_rms_a,
++                ),
++                resonant_peak_error_percent=relative_error_percent(
++                    metrics.resonant_current_peak_a,
++                    reference.resonant_current_peak_a,
++                ),
++                magnetizing_rms_error_percent=relative_error_percent(
++                    metrics.magnetizing_current_rms_a,
++                    reference.magnetizing_current_rms_a,
++                ),
++                secondary_rms_error_percent=relative_error_percent(
++                    metrics.secondary_current_rms_a,
++                    reference.secondary_current_rms_a,
++                ),
++                resonant_cap_peak_error_percent=relative_error_percent(
++                    metrics.resonant_capacitor_peak_v,
++                    reference.resonant_capacitor_peak_v,
++                ),
++            ))
++        return tuple(rows)
++
++    def _build_system_analysis(
++        self,
++        request: LLCAnalysisRequest,
++    ) -> SystemAnalysis:
++        """Build the established system-loss model for TD damping calibration."""
++
++        # Use the normal system work-point set so magnetic/device selection and
++        # equivalent damping remain identical to the V7 regression path.
++        return LLCSystemAnalyzer().analyze(request.spec)
++
++    def solve(
++        self,
++        request: LLCAnalysisRequest,
++        *,
++        tank: TankDesign | None = None,
++        system_analysis: SystemAnalysis | None = None,
++    ) -> MultiFidelityAnalysis:
++        """Run enabled solvers and compare them against the best reference."""
++
++        request.validate()
++        cfg = self.config
++        shared_tank = tank or design_tank(request.spec)
++        results: dict[FidelityLevel, LLCModelResult] = {}
++        warnings: list[str] = []
++
++        if cfg.include_fha:
++            try:
++                results[FidelityLevel.FHA] = solve_fha(request)
++            except Exception as exc:
++                if cfg.strict:
++                    raise
++                warnings.append(f"FHA solve failed: {exc}")
++
++        if cfg.include_harmonic_balance:
++            try:
++                results[FidelityLevel.HARMONIC_BALANCE] = solve_harmonic_balance(
++                    request,
++                    cfg.harmonic_balance,
++                )
++            except (HarmonicBalanceConvergenceError, ValueError, RuntimeError) as exc:
++                if cfg.strict:
++                    raise
++                warnings.append(f"multi-harmonic HB solve failed: {exc}")
++
++        td_system = system_analysis
++        if (
++            cfg.include_time_domain
++            and td_system is None
++            and cfg.derive_time_domain_damping_from_system_loss
++            and cfg.time_domain.series_resistance_ohm is None
++        ):
++            try:
++                td_system = self._build_system_analysis(request)
++            except Exception as exc:
++                if cfg.strict:
++                    raise
++                warnings.append(
++                    "system-loss damping calibration failed; TD uses the "
++                    f"documented reference damping instead: {exc}"
++                )
++
++        if cfg.include_time_domain:
++            try:
++                results[FidelityLevel.SWITCHED_TIME_DOMAIN] = solve_time_domain(
++                    request,
++                    cfg.time_domain,
++                    system_analysis=td_system,
++                    tank=shared_tank,
++                )
++            except (ValueError, RuntimeError) as exc:
++                if cfg.strict:
++                    raise
++                warnings.append(f"switched time-domain solve failed: {exc}")
++
++        reference_level = self._reference_level(results)
++        if (
++            cfg.include_time_domain
++            and reference_level is not FidelityLevel.SWITCHED_TIME_DOMAIN
++        ):
++            warnings.append(
++                "The switched periodic result was unavailable or non-converged; "
++                f"{reference_level.value} is used as the comparison reference."
++            )
++        for level, result in results.items():
++            if not result.convergence.converged:
++                warnings.append(
++                    f"{level.value} returned a non-converged result "
++                    f"(residual={result.convergence.residual_norm:.3e})."
++                )
++
++        return MultiFidelityAnalysis(
++            request=request,
++            results=results,
++            reference_level=reference_level,
++            comparison_rows=self._comparison_rows(results, reference_level),
++            warnings=tuple(dict.fromkeys(warnings)),
++        )
++
++
++def solve_multifidelity(
++    request: LLCAnalysisRequest,
++    config: GoldenSolverConfig | None = None,
++) -> MultiFidelityAnalysis:
++    """Convenience entry point for the V8 FHA/HB/TD comparison."""
++
++    return LLCGoldenSolver(config).solve(request)
+diff --git a/llc_design/analysis/harmonic_balance.py b/llc_design/analysis/harmonic_balance.py
+new file mode 100644
+index 0000000..b606135
+--- /dev/null
++++ b/llc_design/analysis/harmonic_balance.py
+@@ -0,0 +1,1040 @@
++"""Self-consistent multi-harmonic harmonic-balance model for LLC converters.
++
++The solver does not linearly superpose independent harmonic FHA circuits.  It
++iterates/solves the nonlinear full-wave rectifier clamp together with all
++selected harmonic currents.  For each odd harmonic h::
++
++    Ir_h = (Vbridge_h - Vprimary_h) / Zseries(h*ws)
++    Im_h = Vprimary_h / Zm(h*ws)
++    Iload_h = Ir_h - Im_h
++
++``Vprimary(t)`` is generated from the polarity of the reconstructed load
++current, so the harmonic coefficients and rectifier commutation instants are
++self-consistent.  The DC output equation enforces average rectified current
++balance for the specified resistive load.
++"""
++
++from __future__ import annotations
++
++from dataclasses import dataclass, field
++import math
++from typing import Iterable
++
++import numpy as np
++from numpy.typing import NDArray
++from scipy.optimize import least_squares, minimize_scalar, root_scalar
++
++from .metrics import metrics_from_waveform
++from .types import (
++    FidelityLevel,
++    LLCAnalysisRequest,
++    LLCModelResult,
++    SolverConvergence,
++)
++from .waveform import build_standard_waveform_bundle
++from ..core.operating_point import solve_operating_point
++from ..core.tank import GainNotReachableError, TankDesign, design_tank, target_gain
++from ..dynamics.waveforms import deadtime_bridge_square
++
++
++class HarmonicBalanceConvergenceError(RuntimeError):
++    """Raised when no physically acceptable harmonic-balance solution exists."""
++
++
++@dataclass(frozen=True)
++class HarmonicBalanceConfig:
++    """Numerical and physical options for the V8.1 multi-harmonic solver."""
++
++    max_harmonic: int = 7
++    adaptive_harmonics: bool = True
++    minimum_harmonic: int = 5
++    harmonic_convergence_tolerance: float = 2.5e-4
++    samples_per_cycle: int = 2048
++    output_cycles: int = 2
++    series_resistance_ohm: float | None = None
++    magnetizing_series_resistance_ohm: float = 0.0
++    rectifier_smoothing_current_a: float = 0.02
++    rectifier_smoothing_fraction: float = 1.0e-3
++    use_exact_rectifier_projection: bool = True
++    allow_regularized_fallback: bool = True
++    zero_crossing_samples: int = 2048
++    residual_tolerance: float = 2.0e-6
++    maximum_function_evaluations: int = 500
++    output_voltage_tolerance_v: float = 0.02
++    frequency_scan_points: int = 17
++    frequency_tolerance_hz: float = 0.05
++    include_primary_deadtime: bool = True
++    strict_convergence: bool = True
++
++    def validate(self) -> None:
++        if self.max_harmonic < 1 or self.max_harmonic % 2 == 0:
++            raise ValueError("max_harmonic must be a positive odd integer")
++        if self.minimum_harmonic < 1 or self.minimum_harmonic % 2 == 0:
++            raise ValueError("minimum_harmonic must be a positive odd integer")
++        if self.minimum_harmonic > self.max_harmonic:
++            raise ValueError("minimum_harmonic cannot exceed max_harmonic")
++        if self.samples_per_cycle < 256:
++            raise ValueError("harmonic-balance solver requires at least 256 samples per cycle")
++        if self.output_cycles < 1:
++            raise ValueError("output_cycles must be >= 1")
++        if self.zero_crossing_samples < 256:
++            raise ValueError("zero_crossing_samples must be >= 256")
++        if self.residual_tolerance <= 0.0:
++            raise ValueError("residual_tolerance must be positive")
++        if self.maximum_function_evaluations < 20:
++            raise ValueError("maximum_function_evaluations must be >= 20")
++        if self.frequency_scan_points < 9:
++            raise ValueError("frequency_scan_points must be >= 9")
++        if self.series_resistance_ohm is not None and self.series_resistance_ohm < 0.0:
++            raise ValueError("series resistance cannot be negative")
++        if self.magnetizing_series_resistance_ohm < 0.0:
++            raise ValueError("magnetizing series resistance cannot be negative")
++
++
++@dataclass(frozen=True)
++class HarmonicConvergenceStep:
++    maximum_harmonic: int
++    output_voltage_v: float
++    resonant_current_rms_a: float
++    relative_change: float
++    residual_norm: float
++    converged: bool
++
++
++@dataclass(frozen=True)
++class HarmonicBalanceNativeSolution:
++    """Native phasor solution retained for validation and future SR/magnetics."""
++
++    frequency_hz: float
++    output_voltage_v: float
++    load_resistance_ohm: float
++    harmonics: tuple[int, ...]
++    bridge_phasors_v: NDArray[np.complex128]
++    primary_voltage_phasors_v: NDArray[np.complex128]
++    resonant_current_phasors_a: NDArray[np.complex128]
++    magnetizing_current_phasors_a: NDArray[np.complex128]
++    primary_load_current_phasors_a: NDArray[np.complex128]
++    resonant_capacitor_voltage_phasors_v: NDArray[np.complex128]
++    convergence: SolverConvergence
++    convergence_history: tuple[HarmonicConvergenceStep, ...]
++    input_phase_deg: float
++    input_power_w: float
++    output_power_w: float
++    series_loss_w: float
++    magnetizing_loss_w: float
++    rectifier_drop_loss_w: float
++    power_balance_error_w: float
++    rectifier_current_average_a: float
++    smoothing_current_a: float
++    exact_sign_residual_norm: float
++    solver_message: str = ""
++    diagnostics: dict[str, float | int | str | bool] = field(default_factory=dict)
++
++    @property
++    def resonant_current_rms_a(self) -> float:
++        return float(math.sqrt(np.sum(np.abs(self.resonant_current_phasors_a) ** 2) / 2.0))
++
++    @property
++    def magnetizing_current_rms_a(self) -> float:
++        return float(math.sqrt(np.sum(np.abs(self.magnetizing_current_phasors_a) ** 2) / 2.0))
++
++
++def odd_harmonics(max_harmonic: int) -> tuple[int, ...]:
++    if max_harmonic < 1 or max_harmonic % 2 == 0:
++        raise ValueError("maximum harmonic must be a positive odd integer")
++    return tuple(range(1, max_harmonic + 1, 2))
++
++
++def synthesize_real_waveform(
++    phasors: NDArray[np.complex128] | Iterable[complex],
++    harmonics: Iterable[int],
++    phase_rad: NDArray[np.float64],
++) -> NDArray[np.float64]:
++    """Synthesize ``x(theta)=Re(sum(X_h exp(j*h*theta)))``."""
++
++    h = np.asarray(tuple(harmonics), dtype=float)
++    x = np.asarray(tuple(phasors), dtype=np.complex128)
++    phase = np.asarray(phase_rad, dtype=float)
++    if len(h) != len(x):
++        raise ValueError("phasor and harmonic arrays must have equal length")
++    if len(h) == 0:
++        return np.zeros_like(phase)
++    basis = np.exp(1j * np.outer(h, phase))
++    return np.real(x[:, None] * basis).sum(axis=0).astype(float)
++
++
++def extract_peak_phasors(
++    waveform: NDArray[np.float64] | Iterable[float],
++    harmonics: Iterable[int],
++) -> NDArray[np.complex128]:
++    """Extract peak complex phasors using the synthesis convention above."""
++
++    values = np.asarray(tuple(waveform) if not isinstance(waveform, np.ndarray) else waveform,
++                        dtype=float)
++    h = tuple(int(value) for value in harmonics)
++    if values.ndim != 1 or len(values) < 8:
++        raise ValueError("waveform must be a one-dimensional array with at least eight samples")
++    if h and max(h) >= len(values) // 2:
++        raise ValueError("waveform sample count is insufficient for requested harmonics")
++    spectrum = np.fft.rfft(values) / len(values)
++    return np.asarray([2.0 * spectrum[index] for index in h], dtype=np.complex128)
++
++
++def find_trigonometric_zero_crossings(
++    phasors: NDArray[np.complex128] | Iterable[complex],
++    harmonics: Iterable[int],
++    *,
++    search_samples: int = 2048,
++) -> tuple[float, ...]:
++    """Locate all polarity-changing roots of a periodic harmonic waveform.
++
++    Dense sampling is used only to bracket roots.  Each crossing is then
++    polished with Brent's method, so rectifier commutation angles move
++    continuously with the harmonic phasors instead of being quantized to FFT
++    sample locations.  Tangential zeroes that do not change polarity are
++    intentionally ignored.
++    """
++
++    h_tuple = tuple(int(value) for value in harmonics)
++    x = np.asarray(tuple(phasors), dtype=np.complex128)
++    if len(h_tuple) != len(x) or not h_tuple:
++        raise ValueError("phasors and harmonics must be non-empty and equal length")
++    if search_samples < 256:
++        raise ValueError("search_samples must be >= 256")
++    h = np.asarray(h_tuple, dtype=float)
++
++    def scalar(theta: float) -> float:
++        return float(np.real(np.sum(x * np.exp(1j * h * theta))))
++
++    grid = np.linspace(0.0, 2.0 * math.pi, search_samples + 1)
++    values = synthesize_real_waveform(x, h_tuple, grid)
++    roots: list[float] = []
++    zero_tolerance = 1e-11 * max(float(np.max(np.abs(values))), 1.0)
++    # Capture a crossing that falls exactly on a search-grid sample.
++    for index in range(search_samples):
++        if abs(float(values[index])) > zero_tolerance:
++            continue
++        before = float(values[index - 1 if index > 0 else search_samples - 1])
++        after = float(values[index + 1])
++        if before * after < 0.0:
++            roots.append(float(grid[index]) % (2.0 * math.pi))
++    for index in range(search_samples):
++        a = float(grid[index])
++        b = float(grid[index + 1])
++        fa = float(values[index])
++        fb = float(values[index + 1])
++        if abs(fa) <= zero_tolerance or abs(fb) <= zero_tolerance:
++            continue
++        if fa * fb < 0.0:
++            root = root_scalar(
++                scalar, bracket=(a, b), method="brentq", xtol=1e-13)
++            if root.converged:
++                roots.append(float(root.root) % (2.0 * math.pi))
++
++    roots.sort()
++    unique: list[float] = []
++    tolerance = 1e-9
++    for root in roots:
++        if not unique or abs(root - unique[-1]) > tolerance:
++            unique.append(root)
++    if len(unique) > 1 and (2.0 * math.pi - unique[-1] + unique[0]) <= tolerance:
++        unique.pop()
++    if len(unique) < 2:
++        raise HarmonicBalanceConvergenceError(
++            "rectifier projection did not find two polarity-changing current zeroes"
++        )
++    return tuple(unique)
++
++
++def exact_rectifier_projection(
++    load_current_phasors_a: NDArray[np.complex128] | Iterable[complex],
++    harmonics: Iterable[int],
++    *,
++    zero_crossing_samples: int = 2048,
++) -> tuple[NDArray[np.complex128], float, tuple[float, ...]]:
++    """Return exact sign-wave phasors and mean absolute load current.
++
++    The current is a finite trigonometric polynomial.  Once its zero-crossing
++    angles are known, both the Fourier coefficients of ``sign(i)`` and
++    ``mean(abs(i))`` are integrated analytically over each constant-polarity
++    interval.  This removes the regularization bias of a tanh rectifier model
++    from the final harmonic-balance solution.
++    """
++
++    h_tuple = tuple(int(value) for value in harmonics)
++    h = np.asarray(h_tuple, dtype=float)
++    phasors = np.asarray(tuple(load_current_phasors_a), dtype=np.complex128)
++    roots = find_trigonometric_zero_crossings(
++        phasors, h_tuple, search_samples=zero_crossing_samples)
++    boundaries = list(roots) + [roots[0] + 2.0 * math.pi]
++    polarity_phasors = np.zeros(len(h_tuple), dtype=np.complex128)
++    absolute_integral = 0.0
++
++    def current(theta: float) -> float:
++        return float(np.real(np.sum(phasors * np.exp(1j * h * theta))))
++
++    def antiderivative(theta: float) -> float:
++        # Re{X exp(jhθ)} = Re(X) cos(hθ) - Im(X) sin(hθ).
++        return float(np.sum(
++            phasors.real / h * np.sin(h * theta)
++            + phasors.imag / h * np.cos(h * theta)
++        ))
++
++    for start, stop in zip(boundaries[:-1], boundaries[1:]):
++        polarity = 1.0 if current(0.5 * (start + stop)) >= 0.0 else -1.0
++        polarity_phasors += polarity * (
++            np.exp(-1j * h * start) - np.exp(-1j * h * stop)
++        ) / (1j * h)
++        absolute_integral += polarity * (
++            antiderivative(stop) - antiderivative(start)
++        )
++
++    polarity_phasors /= math.pi
++    mean_absolute_current = absolute_integral / (2.0 * math.pi)
++    return (
++        np.asarray(polarity_phasors, dtype=np.complex128),
++        float(max(mean_absolute_current, 0.0)),
++        roots,
++    )
++
++
++class MultiHarmonicLLCSolver:
++    """Nonlinear odd-harmonic steady-state solver for one LLC work point."""
++
++    def __init__(
++        self,
++        request: LLCAnalysisRequest,
++        config: HarmonicBalanceConfig | None = None,
++        *,
++        tank: TankDesign | None = None,
++    ):
++        request.validate()
++        self.request = request
++        self.config = config or HarmonicBalanceConfig(
++            samples_per_cycle=max(256, request.samples_per_cycle),
++            output_cycles=request.waveform_cycles,
++        )
++        self.config.validate()
++        self.tank = tank or design_tank(request.spec)
++        self.series_resistance_ohm = (
++            request.spec.resonant_cap_esr_ohm
++            if self.config.series_resistance_ohm is None
++            else float(self.config.series_resistance_ohm)
++        )
++        self._theta = 2.0 * math.pi * np.arange(
++            self.config.samples_per_cycle, dtype=float
++        ) / self.config.samples_per_cycle
++
++    def _bridge_waveform(self, frequency_hz: float) -> NDArray[np.float64]:
++        spec = self.request.spec
++        deadtime_fraction = (
++            spec.primary_deadtime_s * frequency_hz
++            if self.config.include_primary_deadtime else 0.0
++        )
++        return deadtime_bridge_square(
++            self._theta,
++            spec.bridge_gain * self.request.bus_voltage_v,
++            deadtime_fraction,
++        )
++
++    def _initial_state(
++        self,
++        frequency_hz: float,
++        harmonics: tuple[int, ...],
++        bridge_phasors: NDArray[np.complex128],
++        previous: HarmonicBalanceNativeSolution | None,
++    ) -> NDArray[np.float64]:
++        spec = self.request.spec
++        count = len(harmonics)
++        currents = np.zeros(count, dtype=np.complex128)
++        if previous is not None:
++            previous_map = {
++                harmonic: value
++                for harmonic, value in zip(
++                    previous.harmonics, previous.primary_load_current_phasors_a)
++            }
++            for index, harmonic in enumerate(harmonics):
++                currents[index] = previous_map.get(harmonic, 0.0j)
++            output_guess = previous.output_voltage_v
++        else:
++            output_guess = self.request.output_voltage_target_v
++            rload = self.request.load_resistance_ohm
++            drop = spec.rectifier_equivalent_drop_v
++            rac = (8.0 / math.pi**2) * spec.turns_ratio**2 * rload * (
++                1.0 + drop / max(output_guess, 1e-9)
++            )
++            omega = 2.0 * math.pi * frequency_hz
++            z_series = (
++                self.series_resistance_ohm
++                + 1j * omega * self.tank.lr_h
++                + 1.0 / (1j * omega * self.tank.cr_f)
++            )
++            z_lm = (
++                self.config.magnetizing_series_resistance_ohm
++                + 1j * omega * self.tank.lm_h
++            )
++            z_parallel = 1.0 / (1.0 / rac + 1.0 / z_lm)
++            ir = bridge_phasors[0] / (z_series + z_parallel)
++            vp = ir * z_parallel
++            im = vp / z_lm
++            currents[0] = ir - im
++
++        return np.concatenate((currents.real, currents.imag, [output_guess]))
++
++    @staticmethod
++    def _unpack_state(
++        values: NDArray[np.float64], count: int
++    ) -> tuple[NDArray[np.complex128], float]:
++        phasors = values[:count] + 1j * values[count:2 * count]
++        return np.asarray(phasors, dtype=np.complex128), float(values[-1])
++
++    def _solve_order(
++        self,
++        frequency_hz: float,
++        maximum_harmonic: int,
++        previous: HarmonicBalanceNativeSolution | None = None,
++    ) -> HarmonicBalanceNativeSolution:
++        if frequency_hz <= 0.0:
++            raise ValueError("switching frequency must be positive")
++        harmonics = odd_harmonics(maximum_harmonic)
++        h = np.asarray(harmonics, dtype=float)
++        count = len(harmonics)
++        spec = self.request.spec
++        omega = 2.0 * math.pi * frequency_hz
++        basis = np.exp(1j * np.outer(h, self._theta))
++        bridge_waveform = self._bridge_waveform(frequency_hz)
++        bridge_phasors = extract_peak_phasors(bridge_waveform, harmonics)
++        z_series = (
++            self.series_resistance_ohm
++            + 1j * h * omega * self.tank.lr_h
++            + 1.0 / (1j * h * omega * self.tank.cr_f)
++        )
++        z_magnetizing = (
++            self.config.magnetizing_series_resistance_ohm
++            + 1j * h * omega * self.tank.lm_h
++        )
++
++        expected_primary_peak = (
++            math.pi * self.request.requested_output_power_w
++            / (
++                2.0
++                * spec.turns_ratio
++                * self.request.output_voltage_target_v
++            )
++        )
++        current_scale = max(expected_primary_peak, 0.25)
++        output_current_scale = max(
++            self.request.requested_output_power_w
++            / self.request.output_voltage_target_v,
++            0.25,
++        )
++        smoothing_current = max(
++            self.config.rectifier_smoothing_current_a,
++            self.config.rectifier_smoothing_fraction * current_scale,
++        )
++        rload = self.request.load_resistance_ohm
++
++        def evaluate(
++            unknowns: NDArray[np.float64],
++            *,
++            exact_projection: bool,
++        ) -> tuple[
++            NDArray[np.float64],
++            NDArray[np.complex128],
++            NDArray[np.complex128],
++            NDArray[np.complex128],
++            NDArray[np.complex128],
++            NDArray[np.float64],
++            float,
++            tuple[float, ...],
++        ]:
++            load_phasors, output_voltage = self._unpack_state(unknowns, count)
++            load_current = np.real(load_phasors[:, None] * basis).sum(axis=0)
++            if exact_projection:
++                polarity_phasors, mean_absolute_current, zero_crossings = (
++                    exact_rectifier_projection(
++                        load_phasors,
++                        harmonics,
++                        zero_crossing_samples=self.config.zero_crossing_samples,
++                    )
++                )
++                primary_voltage_phasors = (
++                    spec.turns_ratio
++                    * (output_voltage + spec.rectifier_equivalent_drop_v)
++                    * polarity_phasors
++                )
++                rectifier_current_average = (
++                    spec.turns_ratio * mean_absolute_current
++                )
++            else:
++                polarity = np.tanh(load_current / smoothing_current)
++                primary_voltage_waveform = (
++                    spec.turns_ratio
++                    * (output_voltage + spec.rectifier_equivalent_drop_v)
++                    * polarity
++                )
++                primary_voltage_phasors = extract_peak_phasors(
++                    primary_voltage_waveform, harmonics)
++                rectifier_current_average = (
++                    spec.turns_ratio * float(np.mean(np.abs(load_current)))
++                )
++                zero_crossings = ()
++            resonant_phasors = (
++                bridge_phasors - primary_voltage_phasors
++            ) / z_series
++            magnetizing_phasors = primary_voltage_phasors / z_magnetizing
++            predicted_load_phasors = resonant_phasors - magnetizing_phasors
++            complex_residual = (
++                predicted_load_phasors - load_phasors
++            ) / current_scale
++            dc_residual = (
++                rectifier_current_average - output_voltage / rload
++            ) / output_current_scale
++            residual = np.concatenate(
++                (complex_residual.real, complex_residual.imag, [dc_residual])
++            )
++            return (
++                residual,
++                primary_voltage_phasors,
++                resonant_phasors,
++                magnetizing_phasors,
++                predicted_load_phasors,
++                load_current,
++                rectifier_current_average,
++                zero_crossings,
++            )
++
++        initial = self._initial_state(
++            frequency_hz, harmonics, bridge_phasors, previous)
++        maximum_current = max(100.0, 30.0 * current_scale)
++        maximum_output_voltage = max(
++            4.0 * self.request.output_voltage_target_v,
++            3.0 * spec.bridge_gain * self.request.bus_voltage_v / spec.turns_ratio,
++            10.0,
++        )
++        lower = np.concatenate(
++            (np.full(2 * count, -maximum_current), [1e-4])
++        )
++        upper = np.concatenate(
++            (np.full(2 * count, maximum_current), [maximum_output_voltage])
++        )
++
++        # Smooth projection is only a robust initializer.  The final solve uses
++        # analytically integrated zero-crossing intervals and therefore does
++        # not retain tanh regularization error in its voltage harmonics.
++        seed = least_squares(
++            lambda values: evaluate(values, exact_projection=False)[0],
++            initial,
++            bounds=(lower, upper),
++            method="trf",
++            x_scale="jac",
++            loss="linear",
++            xtol=1e-11,
++            ftol=1e-11,
++            gtol=1e-11,
++            max_nfev=self.config.maximum_function_evaluations,
++        )
++        seed_residual = evaluate(
++            np.asarray(seed.x, dtype=float), exact_projection=False)[0]
++
++        exact_solution = None
++        exact_failure_message = ""
++        if self.config.use_exact_rectifier_projection:
++            try:
++                exact_solution = least_squares(
++                    lambda values: evaluate(values, exact_projection=True)[0],
++                    np.asarray(seed.x, dtype=float),
++                    bounds=(lower, upper),
++                    method="trf",
++                    x_scale="jac",
++                    loss="linear",
++                    xtol=1e-11,
++                    ftol=1e-11,
++                    gtol=1e-11,
++                    max_nfev=self.config.maximum_function_evaluations,
++                )
++                exact_trial_residual = evaluate(
++                    np.asarray(exact_solution.x, dtype=float),
++                    exact_projection=True,
++                )[0]
++                exact_acceptable = bool(
++                    exact_solution.success
++                    and np.linalg.norm(exact_trial_residual)
++                    <= self.config.residual_tolerance
++                )
++            except (HarmonicBalanceConvergenceError, ValueError) as exc:
++                exact_acceptable = False
++                exact_failure_message = str(exc)
++        else:
++            exact_acceptable = False
++
++        seed_acceptable = bool(
++            seed.success
++            and np.linalg.norm(seed_residual) <= self.config.residual_tolerance
++        )
++        if exact_acceptable and exact_solution is not None:
++            solution = exact_solution
++            final_exact = True
++        elif self.config.allow_regularized_fallback and seed_acceptable:
++            solution = seed
++            final_exact = False
++            if not exact_failure_message:
++                exact_failure_message = (
++                    "exact zero-crossing projection did not converge on this "
++                    "rectifier-conduction branch"
++                )
++        elif exact_solution is not None:
++            solution = exact_solution
++            final_exact = True
++        else:
++            solution = seed
++            final_exact = False
++
++        (
++            residual,
++            primary_voltage_phasors,
++            resonant_phasors,
++            magnetizing_phasors,
++            predicted_load_phasors,
++            load_current,
++            rectifier_current_average,
++            zero_crossings,
++        ) = evaluate(
++            np.asarray(solution.x, dtype=float),
++            exact_projection=final_exact,
++        )
++        if final_exact:
++            exact_residual = residual
++        else:
++            try:
++                exact_residual = evaluate(
++                    np.asarray(solution.x, dtype=float),
++                    exact_projection=True,
++                )[0]
++            except HarmonicBalanceConvergenceError:
++                exact_residual = np.full_like(residual, math.inf)
++        load_phasors, output_voltage = self._unpack_state(solution.x, count)
++        resonant_capacitor_phasors = resonant_phasors / (
++            1j * h * omega * self.tank.cr_f
++        )
++        resonant_current = np.real(resonant_phasors[:, None] * basis).sum(axis=0)
++        magnetizing_current = np.real(magnetizing_phasors[:, None] * basis).sum(axis=0)
++        input_power = float(np.mean(bridge_waveform * resonant_current))
++        output_power = output_voltage * output_voltage / rload
++        series_loss = self.series_resistance_ohm * float(
++            np.mean(resonant_current**2)
++        )
++        magnetizing_loss = self.config.magnetizing_series_resistance_ohm * float(
++            np.mean(magnetizing_current**2)
++        )
++        drop_loss = (
++            spec.rectifier_equivalent_drop_v * rectifier_current_average
++        )
++        balance_error = (
++            input_power - output_power - series_loss - magnetizing_loss - drop_loss
++        )
++        input_impedance = bridge_phasors[0] / resonant_phasors[0]
++        input_phase_deg = math.degrees(math.atan2(
++            input_impedance.imag, input_impedance.real))
++        residual_norm = float(np.linalg.norm(residual))
++        exact_residual_norm = float(np.linalg.norm(exact_residual))
++        converged = bool(
++            solution.success
++            and np.isfinite(residual_norm)
++            and residual_norm <= self.config.residual_tolerance
++            and output_voltage > 0.0
++        )
++        convergence = SolverConvergence(
++            converged=converged,
++            residual_norm=residual_norm,
++            iterations=int(seed.nfev + (solution.nfev if final_exact else 0)),
++            method=(
++                "exact_zero_crossing_multi_harmonic_balance"
++                if final_exact
++                else "regularized_multi_harmonic_balance"
++            ),
++            message=(
++                f"seed: {seed.message}; final: {solution.message}"
++                if final_exact
++                else str(solution.message)
++            ),
++        )
++        native = HarmonicBalanceNativeSolution(
++            frequency_hz=float(frequency_hz),
++            output_voltage_v=float(output_voltage),
++            load_resistance_ohm=rload,
++            harmonics=harmonics,
++            bridge_phasors_v=bridge_phasors,
++            primary_voltage_phasors_v=primary_voltage_phasors,
++            resonant_current_phasors_a=resonant_phasors,
++            magnetizing_current_phasors_a=magnetizing_phasors,
++            primary_load_current_phasors_a=load_phasors,
++            resonant_capacitor_voltage_phasors_v=resonant_capacitor_phasors,
++            convergence=convergence,
++            convergence_history=(),
++            input_phase_deg=float(input_phase_deg),
++            input_power_w=input_power,
++            output_power_w=float(output_power),
++            series_loss_w=float(series_loss),
++            magnetizing_loss_w=float(magnetizing_loss),
++            rectifier_drop_loss_w=float(drop_loss),
++            power_balance_error_w=float(balance_error),
++            rectifier_current_average_a=float(rectifier_current_average),
++            smoothing_current_a=float(smoothing_current),
++            exact_sign_residual_norm=exact_residual_norm,
++            solver_message=(
++                f"seed: {seed.message}; final: {solution.message}"
++                if final_exact
++                else str(solution.message)
++            ),
++            diagnostics={
++                "cost": float(solution.cost),
++                "seed_cost": float(seed.cost),
++                "seed_residual_norm": float(np.linalg.norm(seed_residual)),
++                "exact_rectifier_projection": final_exact,
++                "regularized_fallback": not final_exact,
++                "exact_projection_message": exact_failure_message,
++                "zero_crossing_count": len(zero_crossings),
++                "first_zero_crossing_deg": (
++                    math.degrees(zero_crossings[0]) if zero_crossings else math.nan
++                ),
++                "optimality": float(solution.optimality),
++                "active_mask_count": int(np.count_nonzero(solution.active_mask)),
++                "predicted_load_mismatch": float(
++                    np.linalg.norm(predicted_load_phasors - load_phasors)
++                ),
++            },
++        )
++        if not converged and self.config.strict_convergence:
++            raise HarmonicBalanceConvergenceError(
++                f"HB H{maximum_harmonic} failed at {frequency_hz/1e3:.6f} kHz: "
++                f"residual={residual_norm:.3e}; {solution.message}"
++            )
++        return native
++
++    @staticmethod
++    def _relative_change(
++        current: HarmonicBalanceNativeSolution,
++        previous: HarmonicBalanceNativeSolution,
++    ) -> float:
++        voltage_change = abs(
++            current.output_voltage_v - previous.output_voltage_v
++        ) / max(abs(current.output_voltage_v), 1e-12)
++        current_change = abs(
++            current.resonant_current_rms_a - previous.resonant_current_rms_a
++        ) / max(abs(current.resonant_current_rms_a), 1e-12)
++        return float(max(voltage_change, current_change))
++
++    def solve_at_frequency(
++        self,
++        frequency_hz: float,
++        *,
++        previous: HarmonicBalanceNativeSolution | None = None,
++        force_maximum_order: bool = False,
++    ) -> HarmonicBalanceNativeSolution:
++        """Solve one fixed switching frequency with harmonic continuation."""
++
++        if force_maximum_order or not self.config.adaptive_harmonics:
++            orders = (self.config.max_harmonic,)
++        else:
++            orders = odd_harmonics(self.config.max_harmonic)
++        history: list[HarmonicConvergenceStep] = []
++        current_previous = previous
++        final: HarmonicBalanceNativeSolution | None = None
++        for maximum_harmonic in orders:
++            current = self._solve_order(
++                frequency_hz, maximum_harmonic, current_previous)
++            relative_change = (
++                math.inf if current_previous is None
++                else self._relative_change(current, current_previous)
++            )
++            history.append(HarmonicConvergenceStep(
++                maximum_harmonic=maximum_harmonic,
++                output_voltage_v=current.output_voltage_v,
++                resonant_current_rms_a=current.resonant_current_rms_a,
++                relative_change=float(relative_change),
++                residual_norm=current.convergence.residual_norm,
++                converged=current.convergence.converged,
++            ))
++            final = current
++            if (
++                self.config.adaptive_harmonics
++                and maximum_harmonic >= self.config.minimum_harmonic
++                and relative_change <= self.config.harmonic_convergence_tolerance
++            ):
++                break
++            current_previous = current
++        assert final is not None
++        return HarmonicBalanceNativeSolution(
++            **{
++                **final.__dict__,
++                "convergence_history": tuple(history),
++            }
++        )
++
++    def solve_regulated_frequency(self) -> HarmonicBalanceNativeSolution:
++        """Find the HB switching frequency that regulates the requested output."""
++
++        spec = self.request.spec
++        target_output = self.request.output_voltage_target_v
++        try:
++            fha = solve_operating_point(
++                spec, self.tank, self.request.bus_voltage_v,
++                self.request.load_fraction)
++            frequency_guess = fha.switching_frequency_hz
++        except (GainNotReachableError, ValueError):
++            frequency_guess = spec.resonant_frequency_hz
++
++        cache: dict[float, HarmonicBalanceNativeSolution] = {}
++
++        def nearest_previous(frequency_hz: float) -> HarmonicBalanceNativeSolution | None:
++            if not cache:
++                return None
++            return min(cache.items(), key=lambda item: abs(item[0] - frequency_hz))[1]
++
++        def solve_frequency(frequency_hz: float) -> HarmonicBalanceNativeSolution:
++            key = float(frequency_hz)
++            for existing, result in cache.items():
++                if abs(existing - key) <= max(1e-6, 1e-10 * key):
++                    return result
++            result = self.solve_at_frequency(
++                key,
++                previous=nearest_previous(key),
++                force_maximum_order=True,
++            )
++            cache[key] = result
++            return result
++
++        def error(frequency_hz: float) -> float:
++            return solve_frequency(float(frequency_hz)).output_voltage_v - target_output
++
++        frequencies = np.geomspace(
++            spec.minimum_frequency_hz,
++            spec.maximum_frequency_hz,
++            self.config.frequency_scan_points,
++        )
++        frequencies = np.unique(np.append(frequencies, frequency_guess))
++        frequencies.sort()
++        values: list[tuple[float, float]] = []
++        for frequency in frequencies:
++            try:
++                values.append((float(frequency), float(error(float(frequency)))))
++            except HarmonicBalanceConvergenceError:
++                continue
++        if not values:
++            raise HarmonicBalanceConvergenceError(
++                "HB regulated-frequency solve failed at every sampled frequency"
++            )
++
++        direct = min(values, key=lambda item: abs(item[1]))
++        roots: list[float] = []
++        if abs(direct[1]) <= self.config.output_voltage_tolerance_v:
++            roots.append(direct[0])
++        for (f0, e0), (f1, e1) in zip(values[:-1], values[1:]):
++            if e0 * e1 < 0.0:
++                try:
++                    root = root_scalar(
++                        error,
++                        bracket=(f0, f1),
++                        method="brentq",
++                        xtol=self.config.frequency_tolerance_hz,
++                    )
++                except HarmonicBalanceConvergenceError:
++                    continue
++                if root.converged:
++                    roots.append(float(root.root))
++
++        if roots:
++            required = target_gain(spec, self.request.bus_voltage_v)
++            if required <= 1.0:
++                preferred = [
++                    frequency for frequency in roots
++                    if frequency >= self.tank.fr_hz * (1.0 - 1e-8)
++                ]
++            else:
++                preferred = [
++                    frequency for frequency in roots
++                    if frequency <= self.tank.fr_hz * (1.0 + 1e-8)
++                ]
++            candidates = preferred or roots
++            selected_frequency = min(
++                candidates, key=lambda value: abs(value - frequency_guess))
++        else:
++            result = minimize_scalar(
++                lambda frequency: abs(error(float(frequency))),
++                bounds=(spec.minimum_frequency_hz, spec.maximum_frequency_hz),
++                method="bounded",
++                options={"xatol": self.config.frequency_tolerance_hz},
++            )
++            selected_frequency = float(result.x)
++            best = solve_frequency(selected_frequency)
++            if abs(best.output_voltage_v - target_output) > self.config.output_voltage_tolerance_v:
++                available = [solution.output_voltage_v for solution in cache.values()]
++                raise GainNotReachableError(
++                    "HB cannot regulate the requested output inside the frequency range: "
++                    f"best Vo={best.output_voltage_v:.5f} V at "
++                    f"{selected_frequency/1e3:.5f} kHz; sampled range "
++                    f"{min(available):.4f}..{max(available):.4f} V"
++                )
++
++        coarse = solve_frequency(selected_frequency)
++        # Re-run harmonic continuation at the final frequency so the returned
++        # history records the actual order-convergence evidence.
++        final = self.solve_at_frequency(
++            selected_frequency,
++            previous=coarse,
++            force_maximum_order=False,
++        )
++        return HarmonicBalanceNativeSolution(
++            **{
++                **final.__dict__,
++                "diagnostics": {
++                    **final.diagnostics,
++                    "frequency_evaluations": len(cache),
++                    "frequency_guess_hz": float(frequency_guess),
++                    "regulated_output_error_v": float(
++                        final.output_voltage_v - target_output),
++                },
++            }
++        )
++
++    def build_waveform(
++        self,
++        solution: HarmonicBalanceNativeSolution,
++    ):
++        spec = self.request.spec
++        samples_per_cycle = self.config.samples_per_cycle
++        total_samples = self.config.output_cycles * samples_per_cycle
++        time_s = np.arange(total_samples, dtype=float) / (
++            solution.frequency_hz * samples_per_cycle)
++        phase = 2.0 * math.pi * solution.frequency_hz * time_s
++        bridge = deadtime_bridge_square(
++            phase,
++            spec.bridge_gain * self.request.bus_voltage_v,
++            (
++                spec.primary_deadtime_s * solution.frequency_hz
++                if self.config.include_primary_deadtime else 0.0
++            ),
++        )
++        ir = synthesize_real_waveform(
++            solution.resonant_current_phasors_a, solution.harmonics, phase)
++        im = synthesize_real_waveform(
++            solution.magnetizing_current_phasors_a, solution.harmonics, phase)
++        vcr = synthesize_real_waveform(
++            solution.resonant_capacitor_voltage_phasors_v,
++            solution.harmonics,
++            phase,
++        )
++        primary_load = ir - im
++        polarity = np.where(primary_load >= 0.0, 1.0, -1.0)
++        vp = spec.turns_ratio * (
++            solution.output_voltage_v + spec.rectifier_equivalent_drop_v
++        ) * polarity
++        history_text = ",".join(
++            f"H{item.maximum_harmonic}:{item.relative_change:.3e}"
++            for item in solution.convergence_history
++        )
++        model_warnings = [
++            "Multi-harmonic HB uses an ideal transformer and ideal full-bridge rectifier clamp.",
++            "Output-capacitor ripple is reconstructed after the HB DC balance; it is not a retained harmonic state.",
++            "Nonlinear MOSFET Coss, winding capacitance and leakage parasitics are reserved for the V8 parasitic layer.",
++        ]
++        if bool(solution.diagnostics.get("regularized_fallback", False)):
++            model_warnings.append(
++                "Exact zero-crossing HB did not converge on this conduction branch; "
++                "the returned solution uses the regularized rectifier projection "
++                "and must be checked against the switched reference."
++            )
++        return build_standard_waveform_bundle(
++            time_s=time_s,
++            switching_frequency_hz=solution.frequency_hz,
++            model_name="multi_harmonic_hb_v8",
++            bus_voltage_v=self.request.bus_voltage_v,
++            primary_topology=spec.primary_topology.value,
++            primary_deadtime_s=spec.primary_deadtime_s,
++            turns_ratio=spec.turns_ratio,
++            load_resistance_ohm=self.request.load_resistance_ohm,
++            output_capacitance_f=spec.output_capacitance_f,
++            output_cap_esr_ohm=spec.output_cap_esr_ohm,
++            series_resistance_ohm=self.series_resistance_ohm,
++            resonant_inductance_h=self.tank.lr_h,
++            output_voltage_mean_v=solution.output_voltage_v,
++            bridge_voltage_v=bridge,
++            resonant_current_a=ir,
++            resonant_capacitor_voltage_v=vcr,
++            magnetizing_current_a=im,
++            transformer_primary_voltage_v=vp,
++            warnings=tuple(model_warnings),
++            metadata={
++                "maximum_harmonic": solution.harmonics[-1],
++                "harmonics": ",".join(str(value) for value in solution.harmonics),
++                "residual_norm": solution.convergence.residual_norm,
++                "exact_sign_residual_norm": solution.exact_sign_residual_norm,
++                "power_balance_error_w": solution.power_balance_error_w,
++                "smoothing_current_a": solution.smoothing_current_a,
++                "harmonic_convergence": history_text,
++                "regulated": str(
++                    self.request.regulate_output
++                    and self.request.frequency_hz is None
++                ),
++            },
++        )
++
++    def solve(self) -> LLCModelResult:
++        if self.request.frequency_hz is not None:
++            native = self.solve_at_frequency(self.request.frequency_hz)
++        elif self.request.regulate_output:
++            native = self.solve_regulated_frequency()
++        else:
++            native = self.solve_at_frequency(
++                self.request.spec.resonant_frequency_hz)
++        waveform = self.build_waveform(native)
++        normalized_gain = (
++            self.request.spec.turns_ratio
++            * (
++                native.output_voltage_v
++                + self.request.spec.rectifier_equivalent_drop_v
++            )
++            / (
++                self.request.spec.bridge_gain
++                * self.request.bus_voltage_v
++            )
++        )
++        metrics = metrics_from_waveform(
++            self.request,
++            waveform,
++            input_phase_deg=native.input_phase_deg,
++            normalized_gain=normalized_gain,
++            input_power_w=native.input_power_w,
++            modeled_series_loss_w=(
++                native.series_loss_w + native.magnetizing_loss_w
++            ),
++            modeled_rectifier_drop_loss_w=native.rectifier_drop_loss_w,
++        )
++        return LLCModelResult(
++            fidelity=FidelityLevel.HARMONIC_BALANCE,
++            request=self.request,
++            waveform=waveform,
++            metrics=metrics,
++            convergence=native.convergence,
++            harmonic_orders=native.harmonics,
++            warnings=waveform.warnings,
++            diagnostics={
++                **native.diagnostics,
++                "exact_sign_residual_norm": native.exact_sign_residual_norm,
++                "power_balance_error_w": native.power_balance_error_w,
++                "input_power_w": native.input_power_w,
++                "series_loss_w": native.series_loss_w,
++                "rectifier_drop_loss_w": native.rectifier_drop_loss_w,
++            },
++            native_result=native,
++        )
++
++
++def solve_harmonic_balance(
++    request: LLCAnalysisRequest,
++    config: HarmonicBalanceConfig | None = None,
++) -> LLCModelResult:
++    """Convenience entry point for one V8.1 multi-harmonic work point."""
++
++    return MultiHarmonicLLCSolver(request, config).solve()
+diff --git a/llc_design/analysis/metrics.py b/llc_design/analysis/metrics.py
+new file mode 100644
+index 0000000..2f74210
+--- /dev/null
++++ b/llc_design/analysis/metrics.py
+@@ -0,0 +1,91 @@
++"""Shared measurement extraction for V8 LLC model results."""
++
++from __future__ import annotations
++
++import math
++
++import numpy as np
++
++from .types import LLCAnalysisRequest, ModelMetrics
++from ..dynamics.waveforms import WaveformBundle
++
++
++def _signal_stat(bundle: WaveformBundle, key: str, attribute: str, default: float = 0.0) -> float:
++    signal = bundle.signals.get(key)
++    if signal is None:
++        return float(default)
++    return float(getattr(signal.statistics, attribute))
++
++
++def metrics_from_waveform(
++    request: LLCAnalysisRequest,
++    bundle: WaveformBundle,
++    *,
++    input_phase_deg: float,
++    normalized_gain: float | None = None,
++    input_power_w: float | None = None,
++    modeled_series_loss_w: float = 0.0,
++    modeled_rectifier_drop_loss_w: float = 0.0,
++) -> ModelMetrics:
++    """Measure a synchronized waveform bundle using one common convention."""
++
++    spec = request.spec
++    vout = _signal_stat(bundle, "v_output", "average", request.output_voltage_target_v)
++    pout = vout * vout / request.load_resistance_ohm
++    if normalized_gain is None:
++        normalized_gain = (
++            spec.turns_ratio * (vout + spec.rectifier_equivalent_drop_v)
++            / (spec.bridge_gain * request.bus_voltage_v)
++        )
++    if input_power_w is None:
++        vbridge = bundle.signal("v_bridge").values
++        ir = bundle.signal("i_resonant").values
++        input_power_w = float(np.mean(vbridge * ir))
++
++    ir_rms = _signal_stat(bundle, "i_resonant", "rms")
++    ir_peak = _signal_stat(bundle, "i_resonant", "absolute_peak")
++    im_rms = _signal_stat(bundle, "i_magnetizing", "rms")
++    im_peak = _signal_stat(bundle, "i_magnetizing", "absolute_peak")
++    iload_rms = _signal_stat(bundle, "i_primary_load", "rms")
++    iload_peak = _signal_stat(bundle, "i_primary_load", "absolute_peak")
++    isec_rms = _signal_stat(bundle, "i_transformer_secondary", "rms")
++    isec_peak = _signal_stat(bundle, "i_transformer_secondary", "absolute_peak")
++    irect_avg = _signal_stat(bundle, "i_rectified", "average")
++    vcr_rms = _signal_stat(bundle, "v_resonant_cap", "rms")
++    vcr_peak = _signal_stat(bundle, "v_resonant_cap", "absolute_peak")
++    ico_rms = _signal_stat(bundle, "i_output_cap", "rms")
++
++    accounted_output_w = pout + modeled_series_loss_w + modeled_rectifier_drop_loss_w
++    balance_error = float(input_power_w - accounted_output_w)
++    balance_percent = 100.0 * balance_error / max(abs(float(input_power_w)), 1e-12)
++
++    return ModelMetrics(
++        switching_frequency_hz=float(bundle.switching_frequency_hz),
++        output_voltage_v=vout,
++        output_power_w=pout,
++        normalized_gain=float(normalized_gain),
++        input_phase_deg=float(input_phase_deg),
++        input_power_w=float(input_power_w),
++        resonant_current_rms_a=ir_rms,
++        resonant_current_peak_a=ir_peak,
++        magnetizing_current_rms_a=im_rms,
++        magnetizing_current_peak_a=im_peak,
++        primary_load_current_rms_a=iload_rms,
++        primary_load_current_peak_a=iload_peak,
++        secondary_current_rms_a=isec_rms,
++        secondary_current_peak_a=isec_peak,
++        rectifier_current_average_a=irect_avg,
++        resonant_capacitor_rms_v=vcr_rms,
++        resonant_capacitor_peak_v=vcr_peak,
++        output_capacitor_current_rms_a=ico_rms,
++        power_balance_error_w=balance_error,
++        power_balance_error_percent=balance_percent,
++    )
++
++
++def relative_error_percent(value: float, reference: float) -> float:
++    """Signed relative error with a stable zero-reference convention."""
++
++    if math.isclose(reference, 0.0, abs_tol=1e-15):
++        return 0.0 if math.isclose(value, 0.0, abs_tol=1e-15) else math.copysign(math.inf, value)
++    return 100.0 * (value - reference) / reference
+diff --git a/llc_design/analysis/time_domain.py b/llc_design/analysis/time_domain.py
+new file mode 100644
+index 0000000..e0a5026
+--- /dev/null
++++ b/llc_design/analysis/time_domain.py
+@@ -0,0 +1,352 @@
++"""V8 adapter for the nonlinear piecewise switched LLC steady-state solver."""
++
++from __future__ import annotations
++
++from dataclasses import dataclass
++import math
++
++from scipy.optimize import minimize_scalar, root_scalar
++
++import numpy as np
++
++from .metrics import metrics_from_waveform
++from .types import (
++    FidelityLevel,
++    LLCAnalysisRequest,
++    LLCModelResult,
++    SolverConvergence,
++)
++from ..core.operating_point import LLCOperatingPoint, solve_operating_point
++from ..core.tank import TankDesign, design_tank
++from ..dynamics.plant import (
++    DynamicPhasorModel,
++    DynamicPhasorSteadyState,
++    LLCPlantInputs,
++    LLCPlantParameters,
++)
++from ..dynamics.switched import SwitchedSimulationConfig, simulate_switched_steady_state
++from ..dynamics.waveforms import WaveformBundle
++from ..models.system import SystemAnalysis
++
++
++@dataclass(frozen=True)
++class TimeDomainConfig:
++    """Configuration for the V8 ideal switched reference model."""
++
++    samples_per_cycle: int = 512
++    output_cycles: int = 2
++    minimum_settling_cycles: int = 12
++    maximum_settling_cycles: int = 500
++    convergence_tolerance: float = 1e-8
++    rectifier_smoothing_current_a: float = 0.02
++    shooting_max_evaluations: int = 180
++    use_periodic_shooting: bool = True
++    series_resistance_ohm: float | None = None
++    trim_frequency_to_output: bool = True
++    output_voltage_tolerance_v: float = 0.05
++    frequency_scan_points: int = 9
++    frequency_tolerance_hz: float = 0.2
++    strict_convergence: bool = False
++    retry_samples_per_cycle: int = 512
++
++    def validate(self) -> None:
++        if self.samples_per_cycle < 128:
++            raise ValueError("time-domain solver requires at least 128 samples per cycle")
++        if self.output_cycles < 1:
++            raise ValueError("output_cycles must be >= 1")
++        if self.minimum_settling_cycles < 1:
++            raise ValueError("minimum_settling_cycles must be >= 1")
++        if self.maximum_settling_cycles < self.minimum_settling_cycles:
++            raise ValueError("maximum_settling_cycles must exceed minimum_settling_cycles")
++        if self.shooting_max_evaluations < 10:
++            raise ValueError("shooting_max_evaluations must be >= 10")
++        if self.output_voltage_tolerance_v <= 0.0:
++            raise ValueError("output_voltage_tolerance_v must be positive")
++        if self.frequency_scan_points < 5:
++            raise ValueError("frequency_scan_points must be >= 5")
++        if self.frequency_tolerance_hz <= 0.0:
++            raise ValueError("frequency_tolerance_hz must be positive")
++        if self.retry_samples_per_cycle < 128:
++            raise ValueError("retry_samples_per_cycle must be >= 128")
++
++
++@dataclass(frozen=True)
++class TimeDomainNativeSolution:
++    operating_point: LLCOperatingPoint
++    parameters: LLCPlantParameters
++    dynamic_phasor_steady_state: DynamicPhasorSteadyState
++    waveform: WaveformBundle
++    input_phase_deg: float
++    series_loss_w: float
++    rectifier_drop_loss_w: float
++
++
++def _fundamental_input_phase(bundle: WaveformBundle) -> float:
++    samples_per_cycle = int(bundle.metadata.get("samples_per_cycle", 0))
++    if samples_per_cycle <= 0:
++        samples_per_cycle = max(1, len(bundle.time_s) // int(bundle.metadata.get("output_cycles", 1)))
++    cycles = max(1, len(bundle.time_s) // samples_per_cycle)
++    usable = cycles * samples_per_cycle
++    bridge = bundle.signal("v_bridge").values[:usable]
++    current = bundle.signal("i_resonant").values[:usable]
++    vb = np.fft.rfft(bridge) / usable
++    ir = np.fft.rfft(current) / usable
++    fundamental_index = cycles
++    if fundamental_index >= len(vb) or abs(ir[fundamental_index]) < 1e-15:
++        return 0.0
++    impedance = vb[fundamental_index] / ir[fundamental_index]
++    return float(math.degrees(math.atan2(impedance.imag, impedance.real)))
++
++
++def _simulate(
++    model: DynamicPhasorModel,
++    steady: DynamicPhasorSteadyState,
++    config: TimeDomainConfig,
++    samples_per_cycle: int,
++) -> WaveformBundle:
++    return simulate_switched_steady_state(
++        model,
++        steady,
++        SwitchedSimulationConfig(
++            samples_per_cycle=samples_per_cycle,
++            output_cycles=config.output_cycles,
++            minimum_settling_cycles=config.minimum_settling_cycles,
++            maximum_settling_cycles=config.maximum_settling_cycles,
++            convergence_tolerance=config.convergence_tolerance,
++            rectifier_smoothing_current_a=config.rectifier_smoothing_current_a,
++            use_periodic_shooting=config.use_periodic_shooting,
++            shooting_max_evaluations=config.shooting_max_evaluations,
++        ),
++    )
++
++
++def solve_time_domain(
++    request: LLCAnalysisRequest,
++    config: TimeDomainConfig | None = None,
++    *,
++    system_analysis: SystemAnalysis | None = None,
++    tank: TankDesign | None = None,
++) -> LLCModelResult:
++    """Solve the highest-fidelity ideal-switching model currently in V8.1.
++
++    This is the Golden *ideal topology* reference.  Device Coss/Qoss and
++    transformer parasitics are intentionally not hidden in this result; those
++    belong to the later V8 parasitic-aware layer.
++    """
++
++    request.validate()
++    cfg = config or TimeDomainConfig(
++        samples_per_cycle=max(128, min(request.samples_per_cycle, 512)),
++        output_cycles=request.waveform_cycles,
++    )
++    cfg.validate()
++    spec = request.spec
++    tank_design = tank or design_tank(spec)
++    operating_point = solve_operating_point(
++        spec, tank_design, request.bus_voltage_v, request.load_fraction)
++    # By default HB and switched-TD use the same explicit Cr-ESR damping.
++    # A caller may pass ``system_analysis`` to collapse measured/estimated
++    # current-squared losses into the TD model, or explicitly override Rseries.
++    if cfg.series_resistance_ohm is not None:
++        series_resistance = cfg.series_resistance_ohm
++    elif system_analysis is not None:
++        series_resistance = None
++    else:
++        series_resistance = spec.resonant_cap_esr_ohm
++    parameters = LLCPlantParameters.from_design(
++        spec,
++        tank_design,
++        operating_point,
++        system_analysis,
++        series_resistance_ohm=series_resistance,
++    )
++    model = DynamicPhasorModel(parameters)
++
++    def fixed_frequency_steady(frequency_hz: float) -> DynamicPhasorSteadyState:
++        return model.solve_steady_state(
++            LLCPlantInputs(frequency_hz, request.bus_voltage_v, 0.0),
++            operating_point=operating_point,
++        )
++
++    def simulate_steady(
++        steady_state: DynamicPhasorSteadyState,
++    ) -> WaveformBundle:
++        candidate = _simulate(model, steady_state, cfg, cfg.samples_per_cycle)
++        if (
++            candidate.metadata.get("converged") != "True"
++            and cfg.retry_samples_per_cycle != cfg.samples_per_cycle
++        ):
++            retry = _simulate(
++                model, steady_state, cfg, cfg.retry_samples_per_cycle)
++            if retry.metadata.get("converged") == "True":
++                candidate = retry
++        return candidate
++
++    frequency_evaluations = 0
++    if request.frequency_hz is not None:
++        steady = fixed_frequency_steady(request.frequency_hz)
++        bundle = simulate_steady(steady)
++        frequency_evaluations = 1
++    elif request.regulate_output:
++        edf_seed = model.solve_regulated_steady_state(
++            bus_voltage_v=request.bus_voltage_v,
++            target_output_voltage_v=request.output_voltage_target_v,
++            frequency_guess_hz=operating_point.switching_frequency_hz,
++            minimum_frequency_hz=spec.minimum_frequency_hz,
++            maximum_frequency_hz=spec.maximum_frequency_hz,
++            operating_point=operating_point,
++        )
++        cache: dict[float, tuple[DynamicPhasorSteadyState, WaveformBundle]] = {}
++
++        def evaluate_frequency(
++            frequency_hz: float,
++        ) -> tuple[DynamicPhasorSteadyState, WaveformBundle]:
++            nonlocal frequency_evaluations
++            frequency_hz = float(frequency_hz)
++            for existing, result in cache.items():
++                if abs(existing - frequency_hz) <= max(1e-6, 1e-10 * frequency_hz):
++                    return result
++            steady_state = (
++                edf_seed
++                if abs(frequency_hz - edf_seed.inputs.switching_frequency_hz)
++                <= max(1e-6, 1e-10 * frequency_hz)
++                else fixed_frequency_steady(frequency_hz)
++            )
++            result = (steady_state, simulate_steady(steady_state))
++            cache[frequency_hz] = result
++            frequency_evaluations += 1
++            return result
++
++        def output_error(frequency_hz: float) -> float:
++            _, candidate = evaluate_frequency(frequency_hz)
++            return (
++                candidate.signal("v_output").statistics.average
++                - request.output_voltage_target_v
++            )
++
++        seed_frequency = edf_seed.inputs.switching_frequency_hz
++        seed_error = output_error(seed_frequency)
++        selected_frequency = seed_frequency
++        if (
++            cfg.trim_frequency_to_output
++            and abs(seed_error) > cfg.output_voltage_tolerance_v
++        ):
++            grid = np.geomspace(
++                spec.minimum_frequency_hz,
++                spec.maximum_frequency_hz,
++                cfg.frequency_scan_points,
++            )
++            grid = np.unique(np.append(grid, seed_frequency))
++            values: list[tuple[float, float]] = []
++            for frequency in grid:
++                try:
++                    values.append((float(frequency), float(output_error(float(frequency)))))
++                except (RuntimeError, ValueError):
++                    continue
++            brackets = [
++                (f0, f1)
++                for (f0, e0), (f1, e1) in zip(values[:-1], values[1:])
++                if e0 * e1 < 0.0
++            ]
++            if brackets:
++                bracket = min(
++                    brackets,
++                    key=lambda pair: abs(0.5 * (pair[0] + pair[1]) - seed_frequency),
++                )
++                root = root_scalar(
++                    output_error,
++                    bracket=bracket,
++                    method="brentq",
++                    xtol=cfg.frequency_tolerance_hz,
++                )
++                if root.converged:
++                    selected_frequency = float(root.root)
++            elif values:
++                minimum = min(value[0] for value in values)
++                maximum = max(value[0] for value in values)
++                optimized = minimize_scalar(
++                    lambda frequency: abs(output_error(float(frequency))),
++                    bounds=(minimum, maximum),
++                    method="bounded",
++                    options={"xatol": cfg.frequency_tolerance_hz},
++                )
++                selected_frequency = float(optimized.x)
++        steady, bundle = evaluate_frequency(selected_frequency)
++    else:
++        steady = fixed_frequency_steady(operating_point.switching_frequency_hz)
++        bundle = simulate_steady(steady)
++        frequency_evaluations = 1
++    converged = bundle.metadata.get("converged") == "True"
++    mismatch = float(bundle.metadata.get("periodic_mismatch", math.inf))
++    if cfg.strict_convergence and not converged:
++        raise RuntimeError(
++            "switched periodic solution did not converge: "
++            f"mismatch={mismatch:.3e}"
++        )
++
++    input_phase = _fundamental_input_phase(bundle)
++    ir = bundle.signal("i_resonant").values
++    series_loss = parameters.series_resistance_ohm * float(np.mean(ir**2))
++    rectifier_drop_loss = (
++        spec.rectifier_equivalent_drop_v
++        * bundle.signal("i_rectified").statistics.average
++    )
++    output_average = bundle.signal("v_output").statistics.average
++    normalized_gain = (
++        spec.turns_ratio
++        * (output_average + spec.rectifier_equivalent_drop_v)
++        / (spec.bridge_gain * request.bus_voltage_v)
++    )
++    metrics = metrics_from_waveform(
++        request,
++        bundle,
++        input_phase_deg=input_phase,
++        normalized_gain=normalized_gain,
++        modeled_series_loss_w=series_loss,
++        modeled_rectifier_drop_loss_w=rectifier_drop_loss,
++    )
++    convergence = SolverConvergence(
++        converged=converged,
++        residual_norm=mismatch,
++        iterations=int(bundle.metadata.get("shooting_evaluations", 0)),
++        method="periodic_shooting_rk4",
++        message=(
++            "periodic shooting converged"
++            if converged else "periodic shooting returned a usable but non-converged orbit"
++        ),
++    )
++    native = TimeDomainNativeSolution(
++        operating_point=operating_point,
++        parameters=parameters,
++        dynamic_phasor_steady_state=steady,
++        waveform=bundle,
++        input_phase_deg=input_phase,
++        series_loss_w=series_loss,
++        rectifier_drop_loss_w=rectifier_drop_loss,
++    )
++    warnings = list(bundle.warnings)
++    warnings.append(
++        "This is the V8.1 ideal switched reference; nonlinear Coss and magnetic parasitics are not included yet."
++    )
++    return LLCModelResult(
++        fidelity=FidelityLevel.SWITCHED_TIME_DOMAIN,
++        request=request,
++        waveform=bundle,
++        metrics=metrics,
++        convergence=convergence,
++        harmonic_orders=(),
++        warnings=tuple(warnings),
++        diagnostics={
++            "dynamic_phasor_frequency_hz": steady.inputs.switching_frequency_hz,
++            "dynamic_phasor_output_voltage_v": steady.output_voltage_v,
++            "periodic_mismatch": mismatch,
++            "series_resistance_ohm": parameters.series_resistance_ohm,
++            "series_loss_w": series_loss,
++            "rectifier_drop_loss_w": rectifier_drop_loss,
++            "frequency_evaluations": frequency_evaluations,
++            "switched_output_error_v": (
++                output_average - request.output_voltage_target_v
++            ),
++        },
++        native_result=native,
++    )
+diff --git a/llc_design/analysis/types.py b/llc_design/analysis/types.py
+new file mode 100644
+index 0000000..02ff5bb
+--- /dev/null
++++ b/llc_design/analysis/types.py
+@@ -0,0 +1,174 @@
++"""Common V8 analysis contracts for multi-fidelity LLC solvers.
++
++The existing V7 modules remain available.  This module adds a stable adapter
++layer so FHA, multi-harmonic balance and switched time-domain solvers expose
++one result shape to the GUI, CLI, validation and future multiphase engines.
++"""
++
++from __future__ import annotations
++
++from dataclasses import dataclass, field
++from enum import Enum
++from typing import Any, Mapping
++
++from ..core.spec import LLCDesignSpec
++from ..dynamics.waveforms import WaveformBundle
++
++
++class FidelityLevel(str, Enum):
++    """Available steady-state model fidelities in V8.1."""
++
++    FHA = "fha"
++    HARMONIC_BALANCE = "harmonic_balance"
++    SWITCHED_TIME_DOMAIN = "switched_time_domain"
++
++
++@dataclass(frozen=True)
++class LLCAnalysisRequest:
++    """One LLC electrical work-point request.
++
++    ``load_fraction`` always refers to rated output power at the requested
++    target output voltage.  When ``frequency_hz`` is omitted and
++    ``regulate_output`` is true, each solver is allowed to find its own
++    switching frequency that regulates to ``target_output_voltage_v``.
++    """
++
++    spec: LLCDesignSpec
++    vbus_v: float | None = None
++    load_fraction: float = 1.0
++    frequency_hz: float | None = None
++    regulate_output: bool = True
++    target_output_voltage_v: float | None = None
++    waveform_cycles: int = 2
++    samples_per_cycle: int = 2048
++
++    def validate(self) -> None:
++        self.spec.validate()
++        if self.bus_voltage_v <= 0.0:
++            raise ValueError("bus voltage must be positive")
++        if not (0.0 < self.load_fraction <= 1.5):
++            raise ValueError("load fraction must be within 0..1.5")
++        if self.frequency_hz is not None and self.frequency_hz <= 0.0:
++            raise ValueError("switching frequency must be positive")
++        if self.output_voltage_target_v <= 0.0:
++            raise ValueError("target output voltage must be positive")
++        if self.waveform_cycles < 1:
++            raise ValueError("waveform_cycles must be >= 1")
++        if self.samples_per_cycle < 128:
++            raise ValueError("samples_per_cycle must be >= 128")
++
++    @property
++    def bus_voltage_v(self) -> float:
++        return self.spec.vbus_nom_v if self.vbus_v is None else float(self.vbus_v)
++
++    @property
++    def output_voltage_target_v(self) -> float:
++        return (
++            self.spec.vout_v
++            if self.target_output_voltage_v is None
++            else float(self.target_output_voltage_v)
++        )
++
++    @property
++    def requested_output_power_w(self) -> float:
++        return self.spec.pout_w * self.load_fraction
++
++    @property
++    def load_resistance_ohm(self) -> float:
++        return self.output_voltage_target_v**2 / self.requested_output_power_w
++
++
++@dataclass(frozen=True)
++class SolverConvergence:
++    """Numerical convergence status shared by all V8 solvers."""
++
++    converged: bool
++    residual_norm: float
++    iterations: int
++    method: str
++    message: str = ""
++
++
++@dataclass(frozen=True)
++class ModelMetrics:
++    """Comparable electrical measurements extracted from one model result."""
++
++    switching_frequency_hz: float
++    output_voltage_v: float
++    output_power_w: float
++    normalized_gain: float
++    input_phase_deg: float
++    input_power_w: float
++    resonant_current_rms_a: float
++    resonant_current_peak_a: float
++    magnetizing_current_rms_a: float
++    magnetizing_current_peak_a: float
++    primary_load_current_rms_a: float
++    primary_load_current_peak_a: float
++    secondary_current_rms_a: float
++    secondary_current_peak_a: float
++    rectifier_current_average_a: float
++    resonant_capacitor_rms_v: float
++    resonant_capacitor_peak_v: float
++    output_capacitor_current_rms_a: float
++    power_balance_error_w: float
++    power_balance_error_percent: float
++
++    def as_dict(self) -> dict[str, float]:
++        return {
++            name: float(value)
++            for name, value in self.__dict__.items()
++        }
++
++
++@dataclass(frozen=True)
++class LLCModelResult:
++    """Uniform output of one V8 LLC steady-state solver."""
++
++    fidelity: FidelityLevel
++    request: LLCAnalysisRequest
++    waveform: WaveformBundle
++    metrics: ModelMetrics
++    convergence: SolverConvergence
++    harmonic_orders: tuple[int, ...] = ()
++    warnings: tuple[str, ...] = ()
++    diagnostics: Mapping[str, float | int | str | bool] = field(default_factory=dict)
++    native_result: Any = field(default=None, repr=False, compare=False)
++
++
++@dataclass(frozen=True)
++class ModelComparisonRow:
++    """One solver row plus errors relative to the selected reference model."""
++
++    fidelity: FidelityLevel
++    metrics: ModelMetrics
++    converged: bool
++    residual_norm: float
++    frequency_error_percent: float
++    gain_error_percent: float
++    resonant_rms_error_percent: float
++    resonant_peak_error_percent: float
++    magnetizing_rms_error_percent: float
++    secondary_rms_error_percent: float
++    resonant_cap_peak_error_percent: float
++
++
++@dataclass(frozen=True)
++class MultiFidelityAnalysis:
++    """FHA/HB/TD work-point solution and numerical comparison."""
++
++    request: LLCAnalysisRequest
++    results: Mapping[FidelityLevel, LLCModelResult]
++    reference_level: FidelityLevel
++    comparison_rows: tuple[ModelComparisonRow, ...]
++    warnings: tuple[str, ...] = ()
++
++    @property
++    def reference(self) -> LLCModelResult:
++        return self.results[self.reference_level]
++
++    def result(self, level: FidelityLevel) -> LLCModelResult:
++        try:
++            return self.results[level]
++        except KeyError as exc:
++            raise KeyError(f"analysis did not include {level.value}") from exc
+diff --git a/llc_design/analysis/waveform.py b/llc_design/analysis/waveform.py
+new file mode 100644
+index 0000000..7d74533
+--- /dev/null
++++ b/llc_design/analysis/waveform.py
+@@ -0,0 +1,234 @@
++"""Standard waveform-bundle construction for V8 steady-state solvers."""
++
++from __future__ import annotations
++
++import math
++from typing import Mapping
++
++import numpy as np
++from numpy.typing import NDArray
++
++from ..dynamics.waveforms import (
++    WaveformBundle,
++    WaveformSignal,
++    bridge_leg_waveforms,
++    gate_waveforms,
++    signal_statistics,
++)
++
++
++def _solve_periodic_output_network(
++    rectified_current_a: NDArray[np.float64],
++    *,
++    output_voltage_mean_v: float,
++    load_resistance_ohm: float,
++    output_capacitance_f: float,
++    output_cap_esr_ohm: float,
++    sample_interval_s: float,
++) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
++    """Solve the periodic resistive-load/output-capacitor network by FFT.
++
++    The output capacitor is represented by ideal C in series with ESR.  This
++    reconstruction enforces KCL at every retained discrete harmonic instead of
++    integrating ``Irect - constant Io``, which becomes inaccurate when ESR and
++    output ripple are non-negligible.
++    """
++
++    current = np.asarray(rectified_current_a, dtype=float)
++    count = len(current)
++    if count < 8 or sample_interval_s <= 0.0:
++        raise ValueError("periodic output reconstruction requires valid samples and dt")
++    current_ac = current - float(np.mean(current))
++    spectrum = np.fft.rfft(current_ac)
++    frequencies = np.fft.rfftfreq(count, d=sample_interval_s)
++    output_spectrum = np.zeros_like(spectrum, dtype=np.complex128)
++    for index in range(1, len(spectrum)):
++        omega = 2.0 * math.pi * frequencies[index]
++        z_cap = output_cap_esr_ohm + 1.0 / (1j * omega * output_capacitance_f)
++        z_parallel = 1.0 / (1.0 / load_resistance_ohm + 1.0 / z_cap)
++        output_spectrum[index] = spectrum[index] * z_parallel
++    output_ac = np.fft.irfft(output_spectrum, n=count)
++    output_voltage = output_voltage_mean_v + output_ac
++    load_current = output_voltage / load_resistance_ohm
++    capacitor_current = current - load_current
++    capacitor_internal_voltage = output_voltage - output_cap_esr_ohm * capacitor_current
++    return output_voltage, capacitor_internal_voltage, load_current, capacitor_current
++
++
++def build_standard_waveform_bundle(
++    *,
++    time_s: NDArray[np.float64],
++    switching_frequency_hz: float,
++    model_name: str,
++    bus_voltage_v: float,
++    primary_topology: str,
++    primary_deadtime_s: float,
++    turns_ratio: float,
++    load_resistance_ohm: float,
++    output_capacitance_f: float,
++    output_cap_esr_ohm: float,
++    series_resistance_ohm: float,
++    resonant_inductance_h: float,
++    output_voltage_mean_v: float,
++    bridge_voltage_v: NDArray[np.float64],
++    resonant_current_a: NDArray[np.float64],
++    resonant_capacitor_voltage_v: NDArray[np.float64],
++    magnetizing_current_a: NDArray[np.float64],
++    transformer_primary_voltage_v: NDArray[np.float64],
++    warnings: tuple[str, ...] = (),
++    metadata: Mapping[str, float | str] | None = None,
++) -> WaveformBundle:
++    """Create the common LLC waveform schema consumed by GUI/export modules.
++
++    The supplied arrays are the solver-owned electrical states.  Secondary,
++    output-capacitor, bridge-device and ideal-SR traces are derived here using
++    one convention so FHA and harmonic-balance results remain directly
++    comparable to the existing switched solver.
++    """
++
++    arrays = [
++        np.asarray(time_s, dtype=float),
++        np.asarray(bridge_voltage_v, dtype=float),
++        np.asarray(resonant_current_a, dtype=float),
++        np.asarray(resonant_capacitor_voltage_v, dtype=float),
++        np.asarray(magnetizing_current_a, dtype=float),
++        np.asarray(transformer_primary_voltage_v, dtype=float),
++    ]
++    length = len(arrays[0])
++    if length < 8 or any(array.ndim != 1 or len(array) != length for array in arrays):
++        raise ValueError("all waveform inputs must be equal-length one-dimensional arrays")
++    if switching_frequency_hz <= 0.0 or turns_ratio <= 0.0:
++        raise ValueError("switching frequency and turns ratio must be positive")
++    if load_resistance_ohm <= 0.0 or output_capacitance_f <= 0.0:
++        raise ValueError("load resistance and output capacitance must be positive")
++    if resonant_inductance_h <= 0.0:
++        raise ValueError("resonant inductance must be positive")
++
++    time = arrays[0]
++    bridge = arrays[1]
++    ir = arrays[2]
++    vcr = arrays[3]
++    im = arrays[4]
++    vp = arrays[5]
++    dt = float(np.mean(np.diff(time)))
++    phase = 2.0 * math.pi * switching_frequency_hz * time
++    samples_per_cycle = max(1, int(round(1.0 / (switching_frequency_hz * dt))))
++
++    primary_load = ir - im
++    vs = vp / turns_ratio
++    isec = turns_ratio * primary_load
++    irect = np.abs(isec)
++    vout, vco, output_load_current, ico = _solve_periodic_output_network(
++        irect,
++        output_voltage_mean_v=output_voltage_mean_v,
++        load_resistance_ohm=load_resistance_ohm,
++        output_capacitance_f=output_capacitance_f,
++        output_cap_esr_ohm=output_cap_esr_ohm,
++        sample_interval_s=dt,
++    )
++    vlr = bridge - vcr - vp - series_resistance_ohm * ir
++    energy = 0.5 * resonant_inductance_h * ir * ir
++
++    deadtime_fraction = primary_deadtime_s * switching_frequency_hz
++    q1, q2, q3, q4 = gate_waveforms(
++        phase, deadtime_fraction, primary_topology)
++    v_leg_a, v_leg_b = bridge_leg_waveforms(
++        q1, q2, q3, q4, bus_voltage_v, primary_topology)
++    vds_q1 = bus_voltage_v - v_leg_a
++    vds_q2 = v_leg_a
++    vds_q3 = bus_voltage_v - v_leg_b
++    vds_q4 = v_leg_b
++    i_q1 = q1 * ir
++    i_q2 = q2 * ir
++    i_q3 = q3 * ir
++    i_q4 = q4 * ir
++
++    positive_secondary = (isec >= 0.0).astype(float)
++    negative_secondary = 1.0 - positive_secondary
++    gate_sr1 = positive_secondary
++    gate_sr4 = positive_secondary
++    gate_sr2 = negative_secondary
++    gate_sr3 = negative_secondary
++    i_sr1 = np.maximum(isec, 0.0)
++    i_sr4 = i_sr1.copy()
++    i_sr2 = np.maximum(-isec, 0.0)
++    i_sr3 = i_sr2.copy()
++    sr_block_voltage = np.maximum(np.abs(vs), vout)
++    vds_sr1 = np.where(gate_sr1 > 0.5, 0.0, sr_block_voltage)
++    vds_sr4 = vds_sr1.copy()
++    vds_sr2 = np.where(gate_sr2 > 0.5, 0.0, sr_block_voltage)
++    vds_sr3 = vds_sr2.copy()
++
++    raw: dict[str, tuple[str, str, NDArray[np.float64], str, str, float]] = {
++        "v_leg_a": ("A 桥臂中点电压 VA", "V", v_leg_a, "primary", "相对母线负端", switching_frequency_hz),
++        "v_leg_b": ("B 桥臂中点电压 VB", "V", v_leg_b, "primary", "全桥 B 桥臂；半桥时为母线中点", switching_frequency_hz),
++        "v_bridge": ("桥臂差模输出电压 Vab", "V", bridge, "primary", "施加到 LLC 谐振腔的桥臂电压", switching_frequency_hz),
++        "i_resonant": ("谐振电流 Ir", "A", ir, "primary", "Lr/Cr 串联谐振电流", switching_frequency_hz),
++        "v_resonant_cap": ("谐振电容电压 VCr", "V", vcr, "primary", "谐振电容两端电压", switching_frequency_hz),
++        "v_resonant_inductor": ("谐振电感电压 VLr", "V", vlr, "primary", "由 KVL 重构的 Lr 端电压", switching_frequency_hz),
++        "v_transformer_primary": ("变压器原边电压 Vp", "V", vp, "transformer", "理想整流钳位原边电压", switching_frequency_hz),
++        "i_transformer_primary": ("变压器原边电流 Ip", "A", ir, "transformer", "流入变压器端口的总原边电流", switching_frequency_hz),
++        "i_magnetizing": ("励磁电流 Im", "A", im, "transformer", "励磁支路电流", switching_frequency_hz),
++        "i_primary_load": ("原边负载分量 Iload,p", "A", primary_load, "transformer", "Ir-Im", switching_frequency_hz),
++        "v_transformer_secondary": ("变压器次级电压 Vs", "V", vs, "secondary", "未整流次级电压", switching_frequency_hz),
++        "i_transformer_secondary": ("变压器次级电流 Is", "A", isec, "secondary", "未整流次级绕组电流", switching_frequency_hz),
++        "v_rectified": ("SR 整流后电压 Vrect", "V", np.abs(vs), "secondary", "全桥 SR 理想整流电压", 2.0 * switching_frequency_hz),
++        "i_rectified": ("SR 整流输出电流 Irect", "A", irect, "secondary", "理想同步整流后的脉动电流", 2.0 * switching_frequency_hz),
++        "i_load_output": ("输出负载电流 Io", "A", output_load_current, "output", "输出端口电压除以负载电阻", 2.0 * switching_frequency_hz),
++        "i_output_cap": ("输出电容电流 ICo", "A", ico, "output", "整流电流减去直流负载电流", 2.0 * switching_frequency_hz),
++        "v_output_cap_internal": ("输出电容内部电压 VCo", "V", vco, "output", "不含 ESR 瞬时压降", 2.0 * switching_frequency_hz),
++        "v_output": ("输出端电压 Vo", "V", vout, "output", "包含容量纹波与 ESR 纹波", 2.0 * switching_frequency_hz),
++        "v_output_ripple": ("输出纹波 ΔVo", "V", vout - np.mean(vout), "output", "去除直流量后的输出纹波", 2.0 * switching_frequency_hz),
++        "energy_lr": ("谐振电感储能 ELr", "J", energy, "magnetics", "0.5*Lr*Ir²", 2.0 * switching_frequency_hz),
++        "gate_q1": ("Q1 门极逻辑", "pu", q1, "switching", "理想一次侧门极逻辑", switching_frequency_hz),
++        "gate_q2": ("Q2 门极逻辑", "pu", q2, "switching", "理想一次侧门极逻辑", switching_frequency_hz),
++        "gate_q3": ("Q3 门极逻辑", "pu", q3, "switching", "理想一次侧门极逻辑", switching_frequency_hz),
++        "gate_q4": ("Q4 门极逻辑", "pu", q4, "switching", "理想一次侧门极逻辑", switching_frequency_hz),
++        "vds_q1": ("Q1 VDS", "V", vds_q1, "switching", "理想开关状态，不含非线性 Coss", switching_frequency_hz),
++        "vds_q2": ("Q2 VDS", "V", vds_q2, "switching", "理想开关状态，不含非线性 Coss", switching_frequency_hz),
++        "vds_q3": ("Q3 VDS", "V", vds_q3, "switching", "理想开关状态，不含非线性 Coss", switching_frequency_hz),
++        "vds_q4": ("Q4 VDS", "V", vds_q4, "switching", "理想开关状态，不含非线性 Coss", switching_frequency_hz),
++        "ids_q1": ("Q1 支路电流", "A", i_q1, "switching", "理想导通窗口内有符号电流", switching_frequency_hz),
++        "ids_q2": ("Q2 支路电流", "A", i_q2, "switching", "理想导通窗口内有符号电流", switching_frequency_hz),
++        "ids_q3": ("Q3 支路电流", "A", i_q3, "switching", "理想导通窗口内有符号电流", switching_frequency_hz),
++        "ids_q4": ("Q4 支路电流", "A", i_q4, "switching", "理想导通窗口内有符号电流", switching_frequency_hz),
++        "gate_sr1": ("SR1 门极逻辑", "pu", gate_sr1, "sr_switching", "理想电流极性驱动", switching_frequency_hz),
++        "gate_sr2": ("SR2 门极逻辑", "pu", gate_sr2, "sr_switching", "理想电流极性驱动", switching_frequency_hz),
++        "gate_sr3": ("SR3 门极逻辑", "pu", gate_sr3, "sr_switching", "理想电流极性驱动", switching_frequency_hz),
++        "gate_sr4": ("SR4 门极逻辑", "pu", gate_sr4, "sr_switching", "理想电流极性驱动", switching_frequency_hz),
++        "ids_sr1": ("SR1 电流", "A", i_sr1, "sr_switching", "正向对角器件电流", switching_frequency_hz),
++        "ids_sr2": ("SR2 电流", "A", i_sr2, "sr_switching", "反向对角器件电流", switching_frequency_hz),
++        "ids_sr3": ("SR3 电流", "A", i_sr3, "sr_switching", "反向对角器件电流", switching_frequency_hz),
++        "ids_sr4": ("SR4 电流", "A", i_sr4, "sr_switching", "正向对角器件电流", switching_frequency_hz),
++        "vds_sr1": ("SR1 VDS", "V", vds_sr1, "sr_switching", "理想 SR 阻断电压", switching_frequency_hz),
++        "vds_sr2": ("SR2 VDS", "V", vds_sr2, "sr_switching", "理想 SR 阻断电压", switching_frequency_hz),
++        "vds_sr3": ("SR3 VDS", "V", vds_sr3, "sr_switching", "理想 SR 阻断电压", switching_frequency_hz),
++        "vds_sr4": ("SR4 VDS", "V", vds_sr4, "sr_switching", "理想 SR 阻断电压", switching_frequency_hz),
++    }
++
++    signals: dict[str, WaveformSignal] = {}
++    for key, (label, unit, values, group, description, fundamental_hz) in raw.items():
++        values = np.asarray(values, dtype=float)
++        signals[key] = WaveformSignal(
++            key=key,
++            label=label,
++            unit=unit,
++            values=values,
++            statistics=signal_statistics(
++                values,
++                samples_per_period=samples_per_cycle,
++                switching_frequency_hz=switching_frequency_hz,
++                fundamental_frequency_hz=fundamental_hz,
++            ),
++            group=group,
++            description=description,
++        )
++
++    return WaveformBundle(
++        time_s=time,
++        switching_frequency_hz=switching_frequency_hz,
++        model_name=model_name,
++        signals=signals,
++        warnings=warnings,
++        metadata=dict(metadata or {}),
++    )
+diff --git a/llc_design/dynamics/waveforms.py b/llc_design/dynamics/waveforms.py
+index 8ca0ff8..eba25c2 100644
+--- a/llc_design/dynamics/waveforms.py
++++ b/llc_design/dynamics/waveforms.py
+@@ -224,6 +224,15 @@ def _integrate_periodic_zero_mean(current: NDArray[np.float64], dt: float, capac
+     return charge / capacitance_f
+ 
+ 
++# Public V8 helper aliases.  The underscore names are retained for backward
++# compatibility with the existing switched solver.  New solver layers should
++# use these stable names rather than importing private implementation details.
++deadtime_bridge_square = _deadtime_bridge_square
++gate_waveforms = _gate_waveforms
++bridge_leg_waveforms = _bridge_leg_waveforms
++integrate_periodic_zero_mean = _integrate_periodic_zero_mean
++
++
+ def reconstruct_dynamic_phasor_waveforms(
+     model: DynamicPhasorModel,
+     steady_state: DynamicPhasorSteadyState,
+diff --git a/llc_design/gui/main_window.py b/llc_design/gui/main_window.py
+index 8d056e7..5bcd07a 100644
+--- a/llc_design/gui/main_window.py
++++ b/llc_design/gui/main_window.py
+@@ -37,6 +37,17 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+ from matplotlib.figure import Figure
+ import numpy as np
+ 
++from ..analysis import (
++    FidelityLevel,
++    GoldenSolverConfig,
++    HarmonicBalanceConfig,
++    LLCAnalysisRequest,
++    LLCGoldenSolver,
++    LLCModelResult,
++    MultiFidelityAnalysis,
++    TimeDomainConfig,
++    solve_harmonic_balance,
++)
+ from ..control.analysis import SmallSignalAnalysis, build_small_signal_analysis
+ from ..control.digital_loop import DigitalLoopAnalysis, build_digital_loop_analysis
+ from ..control.linearize import ControlInputKind
+@@ -56,6 +67,7 @@ from .workers import FunctionWorker
+ from .updater import add_toolbar_right_side, check_for_updates
+ from . import theme
+ 
++from .widgets.model_comparison_view import ModelComparisonView
+ from .widgets.small_signal_view import SmallSignalView
+ from .widgets.digital_loop_view import DigitalLoopView
+ from .widgets.q_zvs_view import LLCQZVSView
+@@ -77,6 +89,7 @@ class LLCMainWindow(QMainWindow):
+         self.digital_loop_analysis: DigitalLoopAnalysis | None = None
+         self.q_zvs_analysis: LLCQZVSAnalysis | None = None
+         self.transformer_synthesis: TransformerSynthesisResult | None = None
++        self.multi_fidelity_analysis: MultiFidelityAnalysis | None = None
+         self.thread_pool = QThreadPool.globalInstance()
+         self._active_workers: list[FunctionWorker] = []
+         self.output_directory = Path("output/gui_session")
+@@ -245,6 +258,8 @@ class LLCMainWindow(QMainWindow):
+             self.run_q_zvs()
+         elif current is self.transformer_design_view:
+             self.run_transformer_design(None, None)
++        elif current is self.model_comparison_view:
++            self.run_model_comparison({})
+         elif current is self.waveform_view:
+             self.run_waveforms(False)
+         elif current is self.small_signal_view:
+@@ -345,15 +360,18 @@ class LLCMainWindow(QMainWindow):
+         action_layout.setSpacing(6)
+         self.run_button = QPushButton("运行 LLC 完整计算")
+         self.fast_wave_button = QPushButton("快速波形")
++        self.hb_wave_button = QPushButton("多谐波 HB 波形")
+         self.detail_wave_button = QPushButton("详细开关波形")
+         self.small_signal_button = QPushButton("小信号 G(s) / G(z)")
+         self.run_button.clicked.connect(self.run_design)
+         self.fast_wave_button.clicked.connect(lambda: self.run_waveforms(False))
++        self.hb_wave_button.clicked.connect(lambda: self.run_harmonic_waveforms())
+         self.detail_wave_button.clicked.connect(lambda: self.run_waveforms(True))
+         self.small_signal_button.clicked.connect(lambda: self.run_small_signal({}))
+         action_layout.addWidget(self.run_button)
+         row = QHBoxLayout()
+         row.addWidget(self.fast_wave_button)
++        row.addWidget(self.hb_wave_button)
+         row.addWidget(self.detail_wave_button)
+         action_layout.addLayout(row)
+         action_layout.addWidget(self.small_signal_button)
+@@ -388,6 +406,10 @@ class LLCMainWindow(QMainWindow):
+         self.q_zvs_view.analysis_requested.connect(self.run_q_zvs)
+         self.tabs.addTab(self.q_zvs_view, "Q / ZVS")
+ 
++        self.model_comparison_view = ModelComparisonView()
++        self.model_comparison_view.analysis_requested.connect(self.run_model_comparison)
++        self.tabs.addTab(self.model_comparison_view, "FHA / HB / TD")
++
+         self.transformer_design_view = TransformerDesignView()
+         self.transformer_design_view.analysis_requested.connect(self.run_transformer_design)
+         self.transformer_design_view.apply_turns_requested.connect(self._apply_transformer_turns)
+@@ -396,6 +418,7 @@ class LLCMainWindow(QMainWindow):
+ 
+         self.waveform_view = WaveformView()
+         self.waveform_view.fast_requested.connect(lambda options: self.run_waveforms(False, options))
++        self.waveform_view.harmonic_requested.connect(self.run_harmonic_waveforms)
+         self.waveform_view.detailed_requested.connect(lambda options: self.run_waveforms(True, options))
+         self.tabs.addTab(self.waveform_view, "波形")
+ 
+@@ -427,9 +450,13 @@ class LLCMainWindow(QMainWindow):
+ 
+     def _set_busy(self, busy: bool, message: str = "") -> None:
+         self.progress.setVisible(busy)
+-        for button in (self.run_button, self.fast_wave_button, self.detail_wave_button, self.small_signal_button):
++        for button in (
++            self.run_button, self.fast_wave_button, self.hb_wave_button,
++            self.detail_wave_button, self.small_signal_button,
++        ):
+             button.setEnabled(not busy)
+         self.waveform_view.set_busy(busy)
++        self.model_comparison_view.set_busy(busy)
+         self.small_signal_view.set_busy(busy)
+         self.digital_loop_view.set_busy(busy)
+         self.transformer_design_view.set_busy(busy)
+@@ -483,6 +510,8 @@ class LLCMainWindow(QMainWindow):
+             self.primary_device_combo.setCurrentIndex(idx)
+         if hasattr(self, "waveform_view"):
+             self.waveform_view.set_nominal_work_point(spec.vbus_nom_v)
++        if hasattr(self, "model_comparison_view"):
++            self.model_comparison_view.set_nominal_work_point(spec.vbus_nom_v)
+         if hasattr(self, "small_signal_view"):
+             self.small_signal_view.set_nominal_work_point(spec.vbus_nom_v)
+         if hasattr(self, "digital_loop_view"):
+@@ -697,6 +726,94 @@ class LLCMainWindow(QMainWindow):
+             **defaults,
+         )
+ 
++    def run_model_comparison(self, options: dict | None = None) -> None:
++        try:
++            self.spec = self._spec_from_widgets()
++        except Exception as exc:
++            QMessageBox.warning(self, "参数错误", str(exc)); return
++        options = options or {}
++        vbus_v = float(options.get("vbus_v", self.spec.vbus_nom_v))
++        load_fraction = float(options.get("load_fraction", 1.0))
++        max_harmonic = int(options.get("max_harmonic", 7))
++        if max_harmonic % 2 == 0:
++            max_harmonic += 1
++        hb_samples = int(options.get("hb_samples", 1024))
++        include_td = bool(options.get("include_time_domain", True))
++
++        def calculate():
++            request = LLCAnalysisRequest(
++                spec=self.spec,
++                vbus_v=vbus_v,
++                load_fraction=load_fraction,
++                waveform_cycles=2,
++                samples_per_cycle=hb_samples,
++            )
++            config = GoldenSolverConfig(
++                include_time_domain=include_td,
++                harmonic_balance=HarmonicBalanceConfig(
++                    max_harmonic=max_harmonic,
++                    samples_per_cycle=hb_samples,
++                    output_cycles=2,
++                ),
++                time_domain=TimeDomainConfig(
++                    samples_per_cycle=512,
++                    output_cycles=2,
++                ),
++            )
++            return LLCGoldenSolver(config).solve(request)
++
++        self._run_worker(
++            "正在计算 FHA / 多谐波 HB / 分段时域对比…",
++            calculate,
++            self._model_comparison_ready,
++        )
++
++    def _model_comparison_ready(self, result: MultiFidelityAnalysis) -> None:
++        self.multi_fidelity_analysis = result
++        self.model_comparison_view.set_analysis(result)
++        self.tabs.setCurrentWidget(self.model_comparison_view)
++        self._append_log(
++            "Multi-fidelity analysis ready: "
++            f"reference={result.reference_level.value}, "
++            f"models={','.join(level.value for level in result.results)}"
++        )
++
++    def run_harmonic_waveforms(self, options: dict | None = None) -> None:
++        try:
++            self.spec = self._spec_from_widgets()
++        except Exception as exc:
++            QMessageBox.warning(self, "参数错误", str(exc)); return
++        options = options or {}
++        request = LLCAnalysisRequest(
++            spec=self.spec,
++            vbus_v=float(options.get("vbus_v", self.spec.vbus_nom_v)),
++            load_fraction=float(options.get("load_fraction", 1.0)),
++            waveform_cycles=2,
++            samples_per_cycle=1024,
++        )
++        self._run_worker(
++            "正在求解自洽多谐波 LLC 波形…",
++            lambda: solve_harmonic_balance(
++                request,
++                HarmonicBalanceConfig(
++                    max_harmonic=7,
++                    samples_per_cycle=1024,
++                    output_cycles=2,
++                ),
++            ),
++            self._harmonic_waveforms_ready,
++        )
++
++    def _harmonic_waveforms_ready(self, result: LLCModelResult) -> None:
++        self.waveform_view.set_bundle(result.waveform)
++        self.tabs.setCurrentWidget(self.waveform_view)
++        self._append_log(
++            "Multi-harmonic waveform ready: "
++            f"fs={result.metrics.switching_frequency_hz/1e3:.6f} kHz, "
++            f"H={result.harmonic_orders}, "
++            f"residual={result.convergence.residual_norm:.3e}"
++        )
++
+     def run_waveforms(self, detailed: bool, options: dict | None = None) -> None:
+         try:
+             self.spec = self._spec_from_widgets()
+diff --git a/llc_design/gui/updater.py b/llc_design/gui/updater.py
+index bee9e5d..67f0c51 100644
+--- a/llc_design/gui/updater.py
++++ b/llc_design/gui/updater.py
+@@ -17,7 +17,7 @@ from PySide6.QtWidgets import QLabel, QMessageBox, QToolButton
+ from llc_design.gui import theme
+ 
+ #: 与 pyproject.toml / GitHub tag 保持一致的当前版本号。
+-APP_VERSION = "7.5.0"
++APP_VERSION = "8.1.0"
+ 
+ GITHUB_REPO = "yangshuai2022-star/llc_design_tool_v1"
+ RELEASES_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+diff --git a/llc_design/gui/widgets/model_comparison_view.py b/llc_design/gui/widgets/model_comparison_view.py
+new file mode 100644
+index 0000000..6c932c0
+--- /dev/null
++++ b/llc_design/gui/widgets/model_comparison_view.py
+@@ -0,0 +1,179 @@
++"""GUI page for the V8 FHA / multi-harmonic / switched-model comparison."""
++
++from __future__ import annotations
++
++from PySide6.QtCore import Signal
++from PySide6.QtWidgets import (
++    QCheckBox,
++    QDoubleSpinBox,
++    QHBoxLayout,
++    QHeaderView,
++    QLabel,
++    QPlainTextEdit,
++    QPushButton,
++    QSpinBox,
++    QTableWidget,
++    QTableWidgetItem,
++    QVBoxLayout,
++    QWidget,
++)
++
++from ...analysis.types import MultiFidelityAnalysis
++
++
++class ModelComparisonView(QWidget):
++    """Work-point controls and tabular FHA/HB/TD error presentation."""
++
++    analysis_requested = Signal(dict)
++
++    HEADERS = (
++        "模型",
++        "参考",
++        "收敛",
++        "残差",
++        "Fsw/kHz",
++        "Vo/V",
++        "Gain",
++        "Ir RMS/A",
++        "Ir PK/A",
++        "Im RMS/A",
++        "Is RMS/A",
++        "VCr PK/V",
++        "ΔIr RMS/%",
++        "ΔVCr PK/%",
++    )
++
++    def __init__(self, parent=None):
++        super().__init__(parent)
++        self.analysis: MultiFidelityAnalysis | None = None
++        layout = QVBoxLayout(self)
++
++        controls = QHBoxLayout()
++        controls.addWidget(QLabel("母线"))
++        self.vbus = QDoubleSpinBox()
++        self.vbus.setRange(20.0, 2000.0)
++        self.vbus.setDecimals(2)
++        self.vbus.setValue(400.0)
++        self.vbus.setSuffix(" V")
++        controls.addWidget(self.vbus)
++
++        controls.addWidget(QLabel("负载"))
++        self.load_percent = QDoubleSpinBox()
++        self.load_percent.setRange(1.0, 150.0)
++        self.load_percent.setDecimals(1)
++        self.load_percent.setValue(100.0)
++        self.load_percent.setSuffix(" %")
++        controls.addWidget(self.load_percent)
++
++        controls.addWidget(QLabel("最高谐波"))
++        self.max_harmonic = QSpinBox()
++        self.max_harmonic.setRange(1, 21)
++        self.max_harmonic.setSingleStep(2)
++        self.max_harmonic.setValue(7)
++        controls.addWidget(self.max_harmonic)
++
++        controls.addWidget(QLabel("HB 每周期采样"))
++        self.hb_samples = QSpinBox()
++        self.hb_samples.setRange(256, 8192)
++        self.hb_samples.setSingleStep(256)
++        self.hb_samples.setValue(1024)
++        controls.addWidget(self.hb_samples)
++
++        self.include_td = QCheckBox("运行分段时域参考")
++        self.include_td.setChecked(True)
++        controls.addWidget(self.include_td)
++        self.run_button = QPushButton("运行 FHA / HB / TD 对比")
++        self.run_button.clicked.connect(
++            lambda: self.analysis_requested.emit(self.options()))
++        controls.addWidget(self.run_button)
++        controls.addStretch(1)
++        layout.addLayout(controls)
++
++        note = QLabel(
++            "FHA 用于快速设计；HB 对整流换相与高次谐波自洽求解；"
++            "分段时域为当前 V8.1 理想拓扑参考。误差均相对最高已收敛模型。"
++        )
++        note.setWordWrap(True)
++        layout.addWidget(note)
++
++        self.table = QTableWidget(0, len(self.HEADERS))
++        self.table.setHorizontalHeaderLabels(self.HEADERS)
++        header = self.table.horizontalHeader()
++        header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
++        header.setStretchLastSection(True)
++        layout.addWidget(self.table, 1)
++
++        self.details = QPlainTextEdit()
++        self.details.setReadOnly(True)
++        self.details.setMaximumHeight(210)
++        layout.addWidget(self.details)
++
++    def options(self) -> dict:
++        maximum = self.max_harmonic.value()
++        if maximum % 2 == 0:
++            maximum += 1
++        return {
++            "vbus_v": self.vbus.value(),
++            "load_fraction": self.load_percent.value() / 100.0,
++            "max_harmonic": maximum,
++            "hb_samples": self.hb_samples.value(),
++            "include_time_domain": self.include_td.isChecked(),
++        }
++
++    def set_nominal_work_point(self, vbus_v: float) -> None:
++        self.vbus.setValue(vbus_v)
++
++    def set_busy(self, busy: bool) -> None:
++        self.run_button.setEnabled(not busy)
++
++    @staticmethod
++    def _item(value: str) -> QTableWidgetItem:
++        item = QTableWidgetItem(value)
++        return item
++
++    def set_analysis(self, analysis: MultiFidelityAnalysis) -> None:
++        self.analysis = analysis
++        self.table.setRowCount(len(analysis.comparison_rows))
++        for row_index, row in enumerate(analysis.comparison_rows):
++            metrics = row.metrics
++            values = (
++                row.fidelity.value,
++                "REF" if row.fidelity is analysis.reference_level else "",
++                "PASS" if row.converged else "FAIL",
++                f"{row.residual_norm:.3e}",
++                f"{metrics.switching_frequency_hz/1e3:.6f}",
++                f"{metrics.output_voltage_v:.6f}",
++                f"{metrics.normalized_gain:.8f}",
++                f"{metrics.resonant_current_rms_a:.6f}",
++                f"{metrics.resonant_current_peak_a:.6f}",
++                f"{metrics.magnetizing_current_rms_a:.6f}",
++                f"{metrics.secondary_current_rms_a:.6f}",
++                f"{metrics.resonant_capacitor_peak_v:.6f}",
++                f"{row.resonant_rms_error_percent:.4f}",
++                f"{row.resonant_cap_peak_error_percent:.4f}",
++            )
++            for column, value in enumerate(values):
++                self.table.setItem(row_index, column, self._item(value))
++
++        lines = [
++            f"Reference: {analysis.reference_level.value}",
++            f"Work point: {analysis.request.bus_voltage_v:.3f} V / "
++            f"{analysis.request.load_fraction*100:.3f}% / "
++            f"{analysis.request.requested_output_power_w:.3f} W",
++            "",
++        ]
++        for level, result in analysis.results.items():
++            lines.append(
++                f"[{level.value}] {result.convergence.method}; "
++                f"converged={result.convergence.converged}; "
++                f"residual={result.convergence.residual_norm:.6e}"
++            )
++            if result.harmonic_orders:
++                lines.append(
++                    "  Harmonics: " + ", ".join(str(value) for value in result.harmonic_orders)
++                )
++            for warning in result.warnings:
++                lines.append(f"  - {warning}")
++        for warning in analysis.warnings:
++            lines.append(f"[analysis] {warning}")
++        self.details.setPlainText("\n".join(lines))
+diff --git a/llc_design/gui/widgets/waveform_view.py b/llc_design/gui/widgets/waveform_view.py
+index 61eb944..159bc38 100644
+--- a/llc_design/gui/widgets/waveform_view.py
++++ b/llc_design/gui/widgets/waveform_view.py
+@@ -33,6 +33,7 @@ class WaveformView(QWidget):
+     """Synchronized multi-trace waveform viewer with two time cursors."""
+ 
+     fast_requested = Signal(dict)
++    harmonic_requested = Signal(dict)
+     detailed_requested = Signal(dict)
+ 
+     GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+@@ -132,10 +133,14 @@ class WaveformView(QWidget):
+         self.group_combo.addItems([name for name, _ in self.GROUPS])
+         controls.addWidget(self.group_combo)
+         self.fast_button = QPushButton("快速 EDF 波形")
++        self.harmonic_button = QPushButton("多谐波 HB 波形")
+         self.detail_button = QPushButton("详细分段波形")
+         self.fast_button.clicked.connect(lambda: self.fast_requested.emit(self.work_point()))
++        self.harmonic_button.clicked.connect(
++            lambda: self.harmonic_requested.emit(self.work_point()))
+         self.detail_button.clicked.connect(lambda: self.detailed_requested.emit(self.work_point()))
+         controls.addWidget(self.fast_button)
++        controls.addWidget(self.harmonic_button)
+         controls.addWidget(self.detail_button)
+         controls.addStretch(1)
+         layout.addLayout(controls)
+@@ -194,6 +199,7 @@ class WaveformView(QWidget):
+ 
+     def set_busy(self, busy: bool) -> None:
+         self.fast_button.setEnabled(not busy)
++        self.harmonic_button.setEnabled(not busy)
+         self.detail_button.setEnabled(not busy)
+ 
+     def set_bundle(self, bundle: WaveformBundle) -> None:
+diff --git a/llc_design/tests/test_v8_multifidelity.py b/llc_design/tests/test_v8_multifidelity.py
+new file mode 100644
+index 0000000..df15258
+--- /dev/null
++++ b/llc_design/tests/test_v8_multifidelity.py
+@@ -0,0 +1,203 @@
++"""Regression tests for the V8.0/V8.1 multi-fidelity LLC core."""
++
++from __future__ import annotations
++
++import csv
++import json
++import math
++
++import numpy as np
++import pytest
++
++from llc_design.analysis import (
++    FidelityLevel,
++    GoldenSolverConfig,
++    HarmonicBalanceConfig,
++    LLCAnalysisRequest,
++    LLCGoldenSolver,
++    TimeDomainConfig,
++    exact_rectifier_projection,
++    export_multifidelity_analysis,
++    extract_peak_phasors,
++    solve_harmonic_balance,
++    synthesize_real_waveform,
++)
++from llc_design.core.spec import LLCDesignSpec, PrimaryTopology
++
++
++def test_peak_phasor_round_trip_and_exact_rectifier_projection():
++    harmonics = (1, 3, 5, 7)
++    phasors = np.asarray(
++        [1.3 - 4.2j, -0.7 + 0.35j, 0.18 - 0.09j, -0.05 + 0.02j],
++        dtype=np.complex128,
++    )
++    phase = 2.0 * math.pi * np.arange(2048) / 2048
++    waveform = synthesize_real_waveform(phasors, harmonics, phase)
++    recovered = extract_peak_phasors(waveform, harmonics)
++    assert recovered == pytest.approx(phasors, rel=1e-12, abs=1e-12)
++
++    polarity, mean_absolute, roots = exact_rectifier_projection(
++        np.asarray([-5.0j]), (1,), zero_crossing_samples=512)
++    assert roots == pytest.approx((0.0, math.pi), abs=1e-12)
++    assert polarity[0] == pytest.approx(-4.0j / math.pi, abs=1e-12)
++    assert mean_absolute == pytest.approx(10.0 / math.pi, rel=1e-12)
++
++
++def test_regulated_multi_harmonic_balance_is_self_consistent():
++    request = LLCAnalysisRequest(
++        spec=LLCDesignSpec(),
++        load_fraction=1.0,
++        samples_per_cycle=512,
++        waveform_cycles=1,
++    )
++    result = solve_harmonic_balance(
++        request,
++        HarmonicBalanceConfig(
++            max_harmonic=7,
++            samples_per_cycle=512,
++            output_cycles=1,
++            frequency_scan_points=9,
++            zero_crossing_samples=1024,
++        ),
++    )
++    native = result.native_result
++    assert result.convergence.converged
++    assert result.convergence.method == "exact_zero_crossing_multi_harmonic_balance"
++    assert result.harmonic_orders == (1, 3, 5, 7)
++    assert result.metrics.output_voltage_v == pytest.approx(53.0, abs=2e-3)
++    assert result.convergence.residual_norm < 1e-8
++    assert abs(result.metrics.power_balance_error_percent) < 1e-5
++    assert native.diagnostics["exact_rectifier_projection"] is True
++    assert native.exact_sign_residual_norm < 1e-8
++    assert abs(native.resonant_current_phasors_a[1]) > 1e-3
++    assert abs(native.resonant_current_phasors_a[2]) > 1e-3
++
++    # Common V8 waveform schema must satisfy output-node KCL sample by sample.
++    bundle = result.waveform
++    kcl = (
++        bundle.signal("i_rectified").values
++        - bundle.signal("i_load_output").values
++        - bundle.signal("i_output_cap").values
++    )
++    assert np.max(np.abs(kcl)) < 1e-10
++
++
++def test_light_load_hb_fallback_is_explicit_not_silent():
++    request = LLCAnalysisRequest(
++        spec=LLCDesignSpec(),
++        load_fraction=0.2,
++        samples_per_cycle=512,
++        waveform_cycles=1,
++    )
++    result = solve_harmonic_balance(
++        request,
++        HarmonicBalanceConfig(
++            max_harmonic=7,
++            samples_per_cycle=512,
++            output_cycles=1,
++            frequency_scan_points=9,
++            zero_crossing_samples=1024,
++        ),
++    )
++    assert result.convergence.converged
++    assert result.diagnostics["regularized_fallback"] is True
++    assert result.convergence.method == "regularized_multi_harmonic_balance"
++    assert any("regularized rectifier projection" in warning for warning in result.warnings)
++    assert result.metrics.output_voltage_v == pytest.approx(53.0, abs=3e-3)
++
++
++def test_hb_supports_full_and_half_bridge_topologies():
++    config = HarmonicBalanceConfig(
++        max_harmonic=5,
++        minimum_harmonic=5,
++        adaptive_harmonics=False,
++        samples_per_cycle=256,
++        output_cycles=1,
++        frequency_scan_points=9,
++        zero_crossing_samples=512,
++    )
++    specifications = (
++        LLCDesignSpec(),
++        LLCDesignSpec(
++            primary_topology=PrimaryTopology.HALF_BRIDGE,
++            primary_turns=15,
++        ),
++    )
++    for spec in specifications:
++        result = solve_harmonic_balance(
++            LLCAnalysisRequest(
++                spec=spec,
++                samples_per_cycle=256,
++                waveform_cycles=1,
++            ),
++            config,
++        )
++        assert result.convergence.converged
++        assert result.convergence.method == "exact_zero_crossing_multi_harmonic_balance"
++        assert result.metrics.output_voltage_v == pytest.approx(53.0, abs=3e-3)
++        assert spec.minimum_frequency_hz < result.metrics.switching_frequency_hz < spec.maximum_frequency_hz
++
++
++def _golden_analysis():
++    request = LLCAnalysisRequest(
++        spec=LLCDesignSpec(),
++        samples_per_cycle=512,
++        waveform_cycles=1,
++    )
++    config = GoldenSolverConfig(
++        harmonic_balance=HarmonicBalanceConfig(
++            max_harmonic=7,
++            samples_per_cycle=512,
++            output_cycles=1,
++            frequency_scan_points=9,
++            zero_crossing_samples=1024,
++        ),
++        time_domain=TimeDomainConfig(
++            samples_per_cycle=512,
++            output_cycles=1,
++            minimum_settling_cycles=8,
++            maximum_settling_cycles=300,
++            convergence_tolerance=1e-7,
++            shooting_max_evaluations=100,
++            retry_samples_per_cycle=512,
++        ),
++    )
++    return LLCGoldenSolver(config).solve(request)
++
++
++def test_golden_solver_selects_converged_switched_reference():
++    analysis = _golden_analysis()
++    assert analysis.reference_level is FidelityLevel.SWITCHED_TIME_DOMAIN
++    assert set(analysis.results) == {
++        FidelityLevel.FHA,
++        FidelityLevel.HARMONIC_BALANCE,
++        FidelityLevel.SWITCHED_TIME_DOMAIN,
++    }
++    assert len(analysis.comparison_rows) == 3
++    assert all(result.convergence.converged for result in analysis.results.values())
++    reference_row = next(
++        row for row in analysis.comparison_rows
++        if row.fidelity is analysis.reference_level
++    )
++    assert reference_row.frequency_error_percent == pytest.approx(0.0)
++    assert reference_row.resonant_rms_error_percent == pytest.approx(0.0)
++    assert analysis.reference.metrics.output_voltage_v == pytest.approx(53.0, abs=0.06)
++
++
++def test_multifidelity_export_without_waveform_plots(tmp_path):
++    analysis = _golden_analysis()
++    paths = export_multifidelity_analysis(
++        analysis, tmp_path, export_model_waveforms=False)
++    assert paths["comparison_csv"].exists()
++    assert paths["summary_json"].exists()
++    assert paths["report"].exists()
++
++    payload = json.loads(paths["summary_json"].read_text(encoding="utf-8"))
++    assert payload["reference_level"] == "switched_time_domain"
++    assert set(payload["models"]) == {
++        "fha", "harmonic_balance", "switched_time_domain",
++    }
++    with paths["comparison_csv"].open(encoding="utf-8-sig", newline="") as handle:
++        rows = list(csv.DictReader(handle))
++    assert len(rows) == 3
++    assert sum(row["reference"] == "True" for row in rows) == 1
+diff --git a/pyproject.toml b/pyproject.toml
+index 9b1d11c..ea81453 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -1,6 +1,6 @@
+ [project]
+ name = "power-design-toolkit"
+-version = "7.5.0"
++version = "8.1.0"
+ description = "Integrated LLC, single-phase TTPL PFC and three-phase Vienna PFC engineering design laboratory"
+ license = {text = "MIT"}
+ requires-python = ">=3.10"
+diff --git a/release_validation/README.md b/release_validation/README.md
+new file mode 100644
+index 0000000..1a07b2f
+--- /dev/null
++++ b/release_validation/README.md
+@@ -0,0 +1,14 @@
++# V8.1 Release Validation Artifacts
++
++`V8_1_baseline/` was generated from the release-candidate source with:
++
++```bash
++python -m llc_design model-compare \
++  --vbus 400 --load 1.0 \
++  --max-harmonic 7 --hb-samples 512 --td-samples 512 \
++  --output <validation-output>
++```
++
++The files are a compact, reproducible numerical reference for the default
++400 V / 53 V / 3 kW full-bridge LLC design. Waveform PNG/CSV files are not
++committed here; the same command regenerates them offline.
+diff --git a/release_validation/V8_1_baseline/LLC_V8_model_comparison.md b/release_validation/V8_1_baseline/LLC_V8_model_comparison.md
+new file mode 100644
+index 0000000..9589e6b
+--- /dev/null
++++ b/release_validation/V8_1_baseline/LLC_V8_model_comparison.md
+@@ -0,0 +1,40 @@
++# LLC V8 多保真模型对比计算书
++
++> 模型层级：FHA 快速设计、多谐波谐波平衡、理想开关分段时域。
++
++## 工作点
++
++- 母线电压：400 V
++- 目标输出：53 V
++- 负载：100.000% / 3000 W
++- 比较参考：`switched_time_domain`
++
++## 模型结果
++
++| 模型 | 收敛 | Fsw/kHz | Vo/V | Gain | Ir RMS/A | Ir PK/A | Im RMS/A | Is RMS/A | VCr PK/V | ΔIr RMS/% | ΔVCr PK/% |
++|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
++| fha | PASS | 99.688762 | 53.000000 | 1.00125000 | 9.680411 | 13.689913 | 4.841391 | 62.870985 | 205.194532 | -6.5825 | -6.6269 |
++| harmonic_balance | PASS | 99.258907 | 53.000000 | 1.00125000 | 10.257447 | 14.524717 | 4.897150 | 63.705007 | 218.265411 | -1.0141 | -0.6790 |
++| switched_time_domain **REF** | PASS | 99.665617 | 52.955203 | 1.00041005 | 10.362528 | 14.674003 | 4.869039 | 63.826410 | 219.757540 | 0.0000 | 0.0000 |
++
++## 收敛与模型边界
++
++- `fha`：converged=True，residual=0.000000e+00，method=`closed_form_fha`
++  - 谐波阶次：1
++  - FHA retains only the fundamental resonant-state components.
++  - Deadtime is displayed in bridge/gate traces but is not included in the FHA phasor solution.
++- `harmonic_balance`：converged=True，residual=3.107417e-14，method=`exact_zero_crossing_multi_harmonic_balance`
++  - 谐波阶次：1, 3, 5, 7
++  - Multi-harmonic HB uses an ideal transformer and ideal full-bridge rectifier clamp.
++  - Output-capacitor ripple is reconstructed after the HB DC balance; it is not a retained harmonic state.
++  - Nonlinear MOSFET Coss, winding capacitance and leakage parasitics are reserved for the V8 parasitic layer.
++- `switched_time_domain`：converged=True，residual=3.237970e-12，method=`periodic_shooting_rk4`
++  - Switched model uses an ideal transformer and ideal full-bridge SR clamp.
++  - MOSFET nonlinear Coss/Qoss, leakage inductance and winding capacitance are not yet included.
++  - This is the V8.1 ideal switched reference; nonlinear Coss and magnetic parasitics are not included yet.
++
++## 文件结构
++
++- `fha/`：该模型的同步波形 CSV、统计、图表和单模型报告。
++- `harmonic_balance/`：该模型的同步波形 CSV、统计、图表和单模型报告。
++- `switched_time_domain/`：该模型的同步波形 CSV、统计、图表和单模型报告。
+\ No newline at end of file
+diff --git a/release_validation/V8_1_baseline/model_comparison.csv b/release_validation/V8_1_baseline/model_comparison.csv
+new file mode 100644
+index 0000000..2f67051
+--- /dev/null
++++ b/release_validation/V8_1_baseline/model_comparison.csv
+@@ -0,0 +1,4 @@
++﻿model,reference,converged,residual_norm,switching_frequency_hz,output_voltage_v,output_power_w,normalized_gain,input_phase_deg,resonant_current_rms_a,resonant_current_peak_a,magnetizing_current_rms_a,secondary_current_rms_a,resonant_capacitor_peak_v,power_balance_error_percent,frequency_error_percent,gain_error_percent,resonant_rms_error_percent,resonant_peak_error_percent,magnetizing_rms_error_percent,secondary_rms_error_percent,resonant_cap_peak_error_percent
++fha,False,True,0.0,99688.7621985247,53.0,3000.0,1.00125,29.883857231755112,9.680411491707167,13.68991303676255,4.841390750417572,62.87098497393921,205.19453174374777,0.5231843818591595,0.023222726055343996,0.08396040714515947,-6.582530950794156,-6.706350436033186,-0.5678405741434749,-1.4969125042727849,-6.626852667990215
++harmonic_balance,False,True,3.1074167913567105e-14,99258.90654139625,52.99999995554042,2999.9999949668395,1.0012499991663828,34.65886474692516,10.257446625250845,14.524716510729016,4.897149645072007,63.705006910931225,218.2654111971968,-3.0837341632127193e-12,-0.40807511719994505,0.08396032381761054,-1.014052609320825,-1.017354271786733,0.5773318749531248,-0.1902090087424668,-0.6789887429905471
++switched_time_domain,True,True,3.2379699626971167e-12,99665.61712528832,52.95520275453417,2994.930756967415,1.0004100516475156,35.73176015783158,10.362528111961797,14.674003108192329,4.869039130169598,63.82641049364709,219.75754015673397,-0.033843534930414365,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+diff --git a/release_validation/V8_1_baseline/model_comparison.json b/release_validation/V8_1_baseline/model_comparison.json
+new file mode 100644
+index 0000000..ce9f69a
+--- /dev/null
++++ b/release_validation/V8_1_baseline/model_comparison.json
+@@ -0,0 +1,240 @@
++{
++  "request": {
++    "vbus_v": 400.0,
++    "target_output_voltage_v": 53.0,
++    "load_fraction": 1.0,
++    "requested_output_power_w": 3000.0,
++    "frequency_hz": null,
++    "regulate_output": true
++  },
++  "reference_level": "switched_time_domain",
++  "warnings": [],
++  "comparison": [
++    {
++      "model": "fha",
++      "reference": false,
++      "converged": true,
++      "residual_norm": 0.0,
++      "switching_frequency_hz": 99688.7621985247,
++      "output_voltage_v": 53.0,
++      "output_power_w": 3000.0,
++      "normalized_gain": 1.00125,
++      "input_phase_deg": 29.883857231755112,
++      "resonant_current_rms_a": 9.680411491707167,
++      "resonant_current_peak_a": 13.68991303676255,
++      "magnetizing_current_rms_a": 4.841390750417572,
++      "secondary_current_rms_a": 62.87098497393921,
++      "resonant_capacitor_peak_v": 205.19453174374777,
++      "power_balance_error_percent": 0.5231843818591595,
++      "frequency_error_percent": 0.023222726055343996,
++      "gain_error_percent": 0.08396040714515947,
++      "resonant_rms_error_percent": -6.582530950794156,
++      "resonant_peak_error_percent": -6.706350436033186,
++      "magnetizing_rms_error_percent": -0.5678405741434749,
++      "secondary_rms_error_percent": -1.4969125042727849,
++      "resonant_cap_peak_error_percent": -6.626852667990215
++    },
++    {
++      "model": "harmonic_balance",
++      "reference": false,
++      "converged": true,
++      "residual_norm": 3.1074167913567105e-14,
++      "switching_frequency_hz": 99258.90654139625,
++      "output_voltage_v": 52.99999995554042,
++      "output_power_w": 2999.9999949668395,
++      "normalized_gain": 1.0012499991663828,
++      "input_phase_deg": 34.65886474692516,
++      "resonant_current_rms_a": 10.257446625250845,
++      "resonant_current_peak_a": 14.524716510729016,
++      "magnetizing_current_rms_a": 4.897149645072007,
++      "secondary_current_rms_a": 63.705006910931225,
++      "resonant_capacitor_peak_v": 218.2654111971968,
++      "power_balance_error_percent": -3.0837341632127193e-12,
++      "frequency_error_percent": -0.40807511719994505,
++      "gain_error_percent": 0.08396032381761054,
++      "resonant_rms_error_percent": -1.014052609320825,
++      "resonant_peak_error_percent": -1.017354271786733,
++      "magnetizing_rms_error_percent": 0.5773318749531248,
++      "secondary_rms_error_percent": -0.1902090087424668,
++      "resonant_cap_peak_error_percent": -0.6789887429905471
++    },
++    {
++      "model": "switched_time_domain",
++      "reference": true,
++      "converged": true,
++      "residual_norm": 3.2379699626971167e-12,
++      "switching_frequency_hz": 99665.61712528832,
++      "output_voltage_v": 52.95520275453417,
++      "output_power_w": 2994.930756967415,
++      "normalized_gain": 1.0004100516475156,
++      "input_phase_deg": 35.73176015783158,
++      "resonant_current_rms_a": 10.362528111961797,
++      "resonant_current_peak_a": 14.674003108192329,
++      "magnetizing_current_rms_a": 4.869039130169598,
++      "secondary_current_rms_a": 63.82641049364709,
++      "resonant_capacitor_peak_v": 219.75754015673397,
++      "power_balance_error_percent": -0.033843534930414365,
++      "frequency_error_percent": 0.0,
++      "gain_error_percent": 0.0,
++      "resonant_rms_error_percent": 0.0,
++      "resonant_peak_error_percent": 0.0,
++      "magnetizing_rms_error_percent": 0.0,
++      "secondary_rms_error_percent": 0.0,
++      "resonant_cap_peak_error_percent": 0.0
++    }
++  ],
++  "models": {
++    "fha": {
++      "metrics": {
++        "switching_frequency_hz": 99688.7621985247,
++        "output_voltage_v": 53.0,
++        "output_power_w": 3000.0,
++        "normalized_gain": 1.00125,
++        "input_phase_deg": 29.883857231755112,
++        "input_power_w": 3015.778079905598,
++        "resonant_current_rms_a": 9.680411491707167,
++        "resonant_current_peak_a": 13.68991303676255,
++        "magnetizing_current_rms_a": 4.841390750417572,
++        "magnetizing_current_peak_a": 6.846744362966046,
++        "primary_load_current_rms_a": 8.382797996525227,
++        "primary_load_current_peak_a": 11.855038745559183,
++        "secondary_current_rms_a": 62.87098497393921,
++        "secondary_current_peak_a": 88.91279059169388,
++        "rectifier_current_average_a": 56.60368326852726,
++        "resonant_capacitor_rms_v": 145.0971600618284,
++        "resonant_capacitor_peak_v": 205.19453174374777,
++        "output_capacitor_current_rms_a": 27.32014311867531,
++        "power_balance_error_w": 15.778079905598133,
++        "power_balance_error_percent": 0.5231843818591595
++      },
++      "convergence": {
++        "converged": true,
++        "residual_norm": 0.0,
++        "iterations": 1,
++        "method": "closed_form_fha",
++        "message": "FHA analytical solution"
++      },
++      "harmonic_orders": [
++        1
++      ],
++      "warnings": [
++        "FHA retains only the fundamental resonant-state components.",
++        "Deadtime is displayed in bridge/gate traces but is not included in the FHA phasor solution."
++      ],
++      "diagnostics": {
++        "rac_ohm": 43.01388209168166,
++        "normalized_frequency": 0.9968876219852469
++      }
++    },
++    "harmonic_balance": {
++      "metrics": {
++        "switching_frequency_hz": 99258.90654139625,
++        "output_voltage_v": 52.99999995554042,
++        "output_power_w": 2999.9999949668395,
++        "normalized_gain": 1.0012499991663828,
++        "input_phase_deg": 34.65886474692516,
++        "input_power_w": 3023.062365226795,
++        "resonant_current_rms_a": 10.257446625250845,
++        "resonant_current_peak_a": 14.524716510729016,
++        "magnetizing_current_rms_a": 4.897149645072007,
++        "magnetizing_current_peak_a": 8.055467116544285,
++        "primary_load_current_rms_a": 8.494000921457497,
++        "primary_load_current_peak_a": 12.378172119502606,
++        "secondary_current_rms_a": 63.705006910931225,
++        "secondary_current_peak_a": 92.83629089626955,
++        "rectifier_current_average_a": 56.604093626887405,
++        "resonant_capacitor_rms_v": 154.40238068051465,
++        "resonant_capacitor_peak_v": 218.2654111971968,
++        "output_capacitor_current_rms_a": 29.18173411481928,
++        "power_balance_error_w": -9.322320693172514e-11,
++        "power_balance_error_percent": -3.0837341632127193e-12
++      },
++      "convergence": {
++        "converged": true,
++        "residual_norm": 3.1074167913567105e-14,
++        "iterations": 21,
++        "method": "exact_zero_crossing_multi_harmonic_balance",
++        "message": "seed: `gtol` termination condition is satisfied.; final: `xtol` termination condition is satisfied."
++      },
++      "harmonic_orders": [
++        1,
++        3,
++        5,
++        7
++      ],
++      "warnings": [
++        "Multi-harmonic HB uses an ideal transformer and ideal full-bridge rectifier clamp.",
++        "Output-capacitor ripple is reconstructed after the HB DC balance; it is not a retained harmonic state.",
++        "Nonlinear MOSFET Coss, winding capacitance and leakage parasitics are reserved for the V8 parasitic layer."
++      ],
++      "diagnostics": {
++        "cost": 4.828019557602818e-28,
++        "seed_cost": 2.697931726510559e-28,
++        "seed_residual_norm": 2.322899794012027e-14,
++        "exact_rectifier_projection": true,
++        "regularized_fallback": false,
++        "exact_projection_message": "",
++        "zero_crossing_count": 2,
++        "first_zero_crossing_deg": 179.6982808388675,
++        "optimality": 1.8592030482321892e-10,
++        "active_mask_count": 0,
++        "predicted_load_mismatch": 3.6838633069312485e-13,
++        "frequency_evaluations": 22,
++        "frequency_guess_hz": 99688.7621985247,
++        "regulated_output_error_v": -4.445958268206596e-08,
++        "exact_sign_residual_norm": 3.1074167913567105e-14,
++        "power_balance_error_w": -9.317346894022194e-11,
++        "input_power_w": 3023.062365226795,
++        "series_loss_w": 0.4208608450794798,
++        "rectifier_drop_loss_w": 22.641509414969207
++      }
++    },
++    "switched_time_domain": {
++      "metrics": {
++        "switching_frequency_hz": 99665.61712528832,
++        "output_voltage_v": 52.95520275453417,
++        "output_power_w": 2994.930756967415,
++        "normalized_gain": 1.0004100516475156,
++        "input_phase_deg": 35.73176015783158,
++        "input_power_w": 3016.9610006629173,
++        "resonant_current_rms_a": 10.362528111961797,
++        "resonant_current_peak_a": 14.674003108192329,
++        "magnetizing_current_rms_a": 4.869039130169598,
++        "magnetizing_current_peak_a": 8.239342690286808,
++        "primary_load_current_rms_a": 8.510188065819612,
++        "primary_load_current_peak_a": 12.318290633734634,
++        "secondary_current_rms_a": 63.82641049364709,
++        "secondary_current_peak_a": 92.38717975300975,
++        "rectifier_current_average_a": 56.5544049752844,
++        "resonant_capacitor_rms_v": 155.3653552076994,
++        "resonant_capacitor_peak_v": 219.75754015673397,
++        "output_capacitor_current_rms_a": 29.54000116931143,
++        "power_balance_error_w": -1.021046250096333,
++        "power_balance_error_percent": -0.033843534930414365
++      },
++      "convergence": {
++        "converged": true,
++        "residual_norm": 3.2379699626971167e-12,
++        "iterations": 14,
++        "method": "periodic_shooting_rk4",
++        "message": "periodic shooting converged"
++      },
++      "harmonic_orders": [],
++      "warnings": [
++        "Switched model uses an ideal transformer and ideal full-bridge SR clamp.",
++        "MOSFET nonlinear Coss/Qoss, leakage inductance and winding capacitance are not yet included.",
++        "This is the V8.1 ideal switched reference; nonlinear Coss and magnetic parasitics are not included yet."
++      ],
++      "diagnostics": {
++        "dynamic_phasor_frequency_hz": 99665.61712528832,
++        "dynamic_phasor_output_voltage_v": 52.99999999999997,
++        "periodic_mismatch": 3.2379699626971167e-12,
++        "series_resistance_ohm": 0.004,
++        "series_loss_w": 0.4295279554847941,
++        "rectifier_drop_loss_w": 22.62176199011376,
++        "frequency_evaluations": 1,
++        "switched_output_error_v": -0.04479724546582986
++      }
++    }
++  }
++}
+\ No newline at end of file
+diff --git a/webapp/reporting.py b/webapp/reporting.py
+index f748841..6547aee 100644
+--- a/webapp/reporting.py
++++ b/webapp/reporting.py
+@@ -212,7 +212,7 @@ def build_pdf_report(spec_payload: dict[str, Any], project: str = "", engineer:
+     pdf.cell(0, 9, "LLC Resonant Converter Design Report", align="C", new_x="LMARGIN", new_y="NEXT")
+     pdf.set_font("Helvetica", "", 9)
+     pdf.set_text_color(180, 200, 226)
+-    pdf.cell(0, 6, "Power Design Toolkit  ·  V7.5 Web", align="C", new_x="LMARGIN", new_y="NEXT")
++    pdf.cell(0, 6, "Power Design Toolkit  ·  V8.1 Web", align="C", new_x="LMARGIN", new_y="NEXT")
+     pdf.set_y(40)
+     pdf.set_text_color(20, 26, 38)
+     pdf.set_font("Helvetica", "", 9)
+diff --git a/webapp/static/index.html b/webapp/static/index.html
+index a8f21e9..b7ee366 100644
+--- a/webapp/static/index.html
++++ b/webapp/static/index.html
+@@ -10,7 +10,7 @@
+   <a class="skip-link" href="#mainContent">跳到主要内容</a>
+   <header class="appbar">
+     <div class="brand">
+-      <div class="eyebrow">POWER DESIGN TOOLKIT · V7.5 WEB</div>
++      <div class="eyebrow">POWER DESIGN TOOLKIT · V8.1 WEB</div>
+       <h1>Power Design Platform</h1>
+     </div>
+     <nav class="tabs" id="nav" aria-label="主功能导航">

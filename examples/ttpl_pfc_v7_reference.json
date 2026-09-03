@@ -1,0 +1,19 @@
+{
+  "topology": "single_phase_ttpl_pfc",
+  "control": {
+    "current_loop_hz": 50000,
+    "amc_reference_hz": 25000,
+    "voltage_loop_hz": 10000,
+    "observer": false,
+    "default_bode": "open_loop_only"
+  },
+  "analysis": [
+    "current_open_loop",
+    "voltage_open_loop",
+    "iL_Vac_Vbus_sensing",
+    "settled_ac_cycle",
+    "switching_from_ac_workpoint",
+    "zero_crossing",
+    "pf_thd_harmonics"
+  ]
+}

@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: power-design-toolkit
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /api/health

@@ -1,0 +1,11 @@
+CODE GENERATION VALIDATION
+
+Overall: PASS
+
+Checks:
+- current-loop phase margin = 56.98274080447496 deg (PASS)
+- voltage-loop phase margin = 10.835808577149976 deg (PASS)
+
+Warnings:
+- voltage-loop phase margin is only 10.836 deg; generate as a stable baseline, then tune the outer loop
+- Voltage-loop phase margin is below 35 degrees.
