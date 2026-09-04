@@ -50,9 +50,9 @@ def test_tank_mismatch_solves_non_equal_power_share_at_one_common_frequency():
     assert 60e3 <= r.switching_frequency_hz <= 180e3
 
 
-def test_three_phase_y_llc_uses_per_phase_parallel_rectifier_fha_load():
+def test_three_phase_y_llc_uses_shared_six_pulse_rectifier_fha_load():
     n=4.0; rload=2.0
-    expected=(24.0/np.pi**2)*n*n*rload
+    expected=(6.0/np.pi**2)*n*n*rload
     assert abs(three_phase_equivalent_ac_load_ohm(n,rload)-expected)<1e-12*expected
 
 
@@ -62,30 +62,19 @@ def test_three_phase_auto_design_is_topology_specific_and_not_single_phase_fanou
     three=solve_interleaved_electrical_point(s,3)
     assert two.topology == MultiphaseTopology.TWO_PHASE_PARALLEL_90
     assert three.topology == MultiphaseTopology.THREE_PHASE_STAR_120
-    # 3P Y uses three half-bridge legs and synthesizes a different tank/turns
-    # operating condition.  The phase tank must not be a copied 2P tank.
+    # 3P uses the shared Y/Y six-pulse bridge load/gain relation and a
+    # topology-specific tank synthesis. It must not be a copied 2P tank.
     assert abs(two.phases[0].tank.lr_h-three.phases[0].tank.lr_h) > 1e-6
+    assert three.phases[0].primary_turns == 30 and three.phases[0].secondary_turns == 4
     assert abs(three.switching_frequency_hz-three.phases[0].tank.fr_hz) < 0.02*three.phases[0].tank.fr_hz
     assert abs(three.total_output_power_w-s.pout_w) < 1e-6*s.pout_w
 
 
-def test_three_phase_y_mismatch_activates_floating_neutral_coupling():
+def test_three_phase_shared_bridge_does_not_fake_independent_phase_mismatch():
+    import pytest
     s=LLCDesignSpec()
-    nominal=solve_interleaved_electrical_point(s,3)
-    # Freeze topology-specific auto values into the customer-validation mode,
-    # then perturb one Cr to emulate a measured production mismatch.
-    t=nominal.phases[0].tank
-    # AUTO 3P selected an effective half-bridge turns ratio close to 15:4 for
-    # the default specification.  Use that ratio explicitly in USER mode.
-    manual=s.clone(parameter_mode=TankParameterMode.USER_DEFINED,
-                   user_lr_h=t.lr_h,user_cr_f=t.cr_f,user_lm_h=t.lm_h,
-                   primary_turns=15,secondary_turns=4)
-    r=solve_interleaved_electrical_point(manual,3,phase_spec_overrides={2:{'user_cr_f':t.cr_f*1.03}})
-    shares=np.asarray([p.share_percent for p in r.phases])
-    assert np.ptp(shares)>1e-4
-    # Star coupling should keep all phases participating rather than silently
-    # collapsing the mismatched phase into an independent-cell solution.
-    assert min(shares)>1.0
+    with pytest.raises(NotImplementedError, match="balanced"):
+        solve_interleaved_electrical_point(s,3,phase_spec_overrides={2:{'user_cr_f':150e-9}})
 
 
 def test_user_defined_turns_ratio_is_preserved_in_multiphase_validation():
@@ -100,10 +89,11 @@ def test_user_defined_turns_ratio_is_preserved_in_multiphase_validation():
     assert all(abs(p.turns_ratio-17/3)<1e-12 for p in three.phases)
 
 
-def test_three_phase_waveform_uses_topology_specific_model_not_phase_fanout():
+def test_three_phase_waveform_uses_dedicated_td_model_not_phase_fanout():
     from llc_design.multiphase import solve_interleaved_llc
     from llc_design.analysis import FidelityLevel
-    r=solve_interleaved_llc(LLCDesignSpec(),3,fidelity=FidelityLevel.HARMONIC_BALANCE,samples_per_cycle=256)
-    assert r.waveform.metadata['electrical_model']=='three_phase_star_floating_neutral_fha'
+    r=solve_interleaved_llc(LLCDesignSpec(),3,fidelity=FidelityLevel.SWITCHED_TIME_DOMAIN,samples_per_cycle=258)
+    assert r.waveform.metadata['electrical_model']=='three_phase_y_shared_bridge_td'
+    assert r.waveform.metadata['phase_offsets_deg']=='0,120,240'
     assert all(p.electrical is None for p in r.phases)
-    assert any('single-phase' in w and 'fan-out' in w for w in r.warnings)
+    assert 'i_secondary_p1' in r.waveform.signals

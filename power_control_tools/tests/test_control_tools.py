@@ -94,3 +94,58 @@ def test_general_third_order_discretizes_to_sos_and_c99(tmp_path):
     out=export_c99_filter(d,tmp_path,prefix='CTRL_3RD')
     verify=verify_c99_filter(d,out,samples=160)
     assert verify.available and verify.passed
+
+
+def test_pi_uses_kp_ti_project_convention():
+    kp=2.5; ti=0.004
+    a=design_controller(ControllerKind.PI,kp=kp,ti_s=ti)
+    np.testing.assert_allclose(a.numerator,[kp,kp/ti],rtol=0,atol=1e-12)
+    np.testing.assert_allclose(a.denominator,[1.0,0.0],rtol=0,atol=0)
+
+
+def test_pif_is_pi_followed_by_first_order_lpf():
+    kp=1.7; ti=0.008; fp=7500.0
+    a=design_controller(ControllerKind.PIF,kp=kp,ti_s=ti,lpf_pole_hz=fp)
+    w=2*np.pi*fp
+    expected_num=np.polymul([kp,kp/ti],[w])
+    expected_den=np.polymul([1.0,0.0],[1.0,w])
+    np.testing.assert_allclose(a.numerator,expected_num,rtol=1e-12)
+    np.testing.assert_allclose(a.denominator,expected_den,rtol=1e-12)
+
+
+def test_pid_and_pidf_tustin_are_implementable():
+    pid=design_controller(ControllerKind.PID,kp=1.2,ti_s=0.01,td_s=2e-4)
+    dz=discretize_transfer_function(pid,50_000,DiscretizationMethod.TUSTIN)
+    assert dz.implementable
+    pidf=design_controller(ControllerKind.PIDF,kp=1.2,ti_s=0.01,td_s=2e-4,lpf_pole_hz=12_000)
+    df=discretize_transfer_function(pidf,50_000,DiscretizationMethod.TUSTIN)
+    assert df.implementable
+
+
+def test_type2_rc_matches_analytical_zero_pole_locations():
+    r1=10e3; r2=47e3; c1=10e-9; c2=470e-12
+    a=design_controller(ControllerKind.TYPE_II,type_input_mode='rc',r1_ohm=r1,r2_ohm=r2,c1_f=c1,c2_f=c2)
+    z=np.roots(a.numerator); p=np.roots(a.denominator)
+    wz=1/(r2*c1); wp=(c1+c2)/(r2*c1*c2)
+    assert np.min(np.abs(z+wz)) < 1e-7*wz
+    finite=[x for x in p if abs(x)>1e-9]
+    assert len(finite)==1 and abs(finite[0]+wp)<1e-7*wp
+
+
+def test_type3_rc_has_two_zeros_integrator_and_two_hf_poles():
+    a=design_controller(ControllerKind.TYPE_III,type_input_mode='rc',r1_ohm=10e3,r2_ohm=47e3,r3_ohm=12e3,c1_f=10e-9,c2_f=470e-12,c3_f=1e-9)
+    assert len(np.roots(a.numerator))==2
+    p=np.roots(a.denominator)
+    assert len(p)==3 and np.min(np.abs(p))<1e-6
+
+
+def test_single_file_c99_export(tmp_path):
+    a=design_controller(ControllerKind.PI,kp=0.7,ti_s=0.0056)
+    d=discretize_transfer_function(a,40_000,DiscretizationMethod.TUSTIN)
+    out=export_c99_filter(d,tmp_path,prefix='PFC_VLOOP')
+    assert out.file_path.suffix=='.h'
+    assert len(list(tmp_path.glob('pfc_vloop.*')))==1
+    text=out.file_path.read_text()
+    assert 'static inline float32_t PFC_VLOOP_Run' in text
+    verify=verify_c99_filter(d,out,samples=96)
+    assert verify.available and verify.passed

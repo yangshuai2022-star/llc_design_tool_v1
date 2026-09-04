@@ -15,6 +15,11 @@ class DiscretizationMethod(str, Enum):
 class ControllerKind(str, Enum):
     INTEGRATOR = "integrator"
     PI = "pi"
+    PIF = "pif"
+    PID = "pid"
+    PIDF = "pidf"
+    TYPE_II = "type_ii"
+    TYPE_III = "type_iii"
     MODIFIED_PI = "modified_pi"
     LEAD = "lead"
     LAG = "lag"
@@ -61,8 +66,8 @@ class AnalogTransferFunction:
             raise ValueError("analog denominator cannot be zero")
         if b.size == 0:
             raise ValueError("analog numerator cannot be empty")
-        if len(b) - 1 > len(a) - 1:
-            raise ValueError("controller/filter must be proper for causal discretization")
+        # Pure PID contains an ideal derivative and is intentionally improper
+        # in s-domain. Tustin/backward-Euler map it to a causal z-domain form.
 
 
 @dataclass(frozen=True)

@@ -32,7 +32,18 @@ def _payload(d, r):
 @click.option('--kind',type=click.Choice([v.value for v in ControllerKind]),default='pi')
 @click.option('--fs',type=float,default=40000.0)
 @click.option('--kp',type=float,default=1.0)
-@click.option('--ki',type=float,default=100.0)
+@click.option('--ki',type=float,default=None,help='Legacy PI Ki; prefer --ti')
+@click.option('--ti',type=float,default=0.01,help='PI/PID integral time Ti [s]')
+@click.option('--td',type=float,default=1e-4,help='PID derivative time Td [s]')
+@click.option('--lpf-pole',type=float,default=10000.0,help='PIF/PIDF low-pass pole [Hz]')
+@click.option('--fp0',type=float,default=100.0,help='Type-II/III integrator scaling frequency [Hz]')
+@click.option('--type-input-mode',type=click.Choice(['pz','rc']),default='pz')
+@click.option('--r1',type=float,default=10000.0)
+@click.option('--r2',type=float,default=47000.0)
+@click.option('--r3',type=float,default=10000.0)
+@click.option('--c1-nf',type=float,default=10.0)
+@click.option('--c2-nf',type=float,default=0.47)
+@click.option('--c3-nf',type=float,default=1.0)
 @click.option('--gain',type=float,default=1.0)
 @click.option('--fz',type=float,default=100.0)
 @click.option('--fp',type=float,default=10000.0)
@@ -46,8 +57,10 @@ def _payload(d, r):
 @click.option('--prewarp',type=float,default=None)
 @click.option('--export-dir',type=click.Path(path_type=Path),default=None)
 @click.option('--prefix',type=str,default='POWER_CTRL')
-def s2z(kind,fs,kp,ki,gain,fz,fp,fz2,fp2,fz3,fp3,numerator,denominator,method,prewarp,export_dir,prefix):
-    kwargs=dict(kp=kp,ki=ki,gain=gain,fz_hz=fz,fp_hz=fp,fz1_hz=fz,fp1_hz=fp,fz2_hz=fz2,fp2_hz=fp2,fz3_hz=fz3,fp3_hz=fp3)
+def s2z(kind,fs,kp,ki,ti,td,lpf_pole,fp0,type_input_mode,r1,r2,r3,c1_nf,c2_nf,c3_nf,gain,fz,fp,fz2,fp2,fz3,fp3,numerator,denominator,method,prewarp,export_dir,prefix):
+    kwargs=dict(kp=kp,ti_s=ti,td_s=td,lpf_pole_hz=lpf_pole,fp0_hz=fp0,type_input_mode=type_input_mode,r1_ohm=r1,r2_ohm=r2,r3_ohm=r3,c1_f=c1_nf*1e-9,c2_f=c2_nf*1e-9,c3_f=c3_nf*1e-9,gain=gain,fz_hz=fz,fp_hz=fp,fz1_hz=fz,fp1_hz=fp,fz2_hz=fz2,fp2_hz=fp2,fz3_hz=fz3,fp3_hz=fp3)
+    if ki is not None and kind == ControllerKind.PI.value:
+        kwargs.pop("ti_s", None); kwargs["ki"] = ki
     if ControllerKind(kind) == ControllerKind.GENERAL:
         if numerator is None or denominator is None:
             raise click.UsageError('--kind general requires --numerator and --denominator')
@@ -60,7 +73,7 @@ def s2z(kind,fs,kp,ki,gain,fz,fp,fz2,fp2,fz3,fp3,numerator,denominator,method,pr
     if export_dir:
         out=export_c99_filter(d,export_dir,prefix=prefix)
         verify=verify_c99_filter(d,out)
-        payload['c99']={'source':str(out.source_path),'verification':verify.message,
+        payload['c99']={'file':str(out.file_path),'verification':verify.message,
                         'impulse_max_abs_error':verify.impulse_max_abs_error,
                         'step_max_abs_error':verify.step_max_abs_error}
     click.echo(json.dumps(payload,indent=2))
@@ -95,7 +108,7 @@ def filter_cmd(implementation,response,family,fs,order,fc,f2,q,rp,rs,taps,window
     payload=_payload(d,r); payload.update({'family':result.family,'response':result.response,'description':result.description})
     if export_dir:
         out=export_c99_filter(d,export_dir,prefix=prefix); verify=verify_c99_filter(d,out)
-        payload['c99']={'source':str(out.source_path),'verification':verify.message,
+        payload['c99']={'file':str(out.file_path),'verification':verify.message,
                         'impulse_max_abs_error':verify.impulse_max_abs_error,
                         'step_max_abs_error':verify.step_max_abs_error}
     click.echo(json.dumps(payload,indent=2))

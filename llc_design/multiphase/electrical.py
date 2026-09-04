@@ -9,16 +9,11 @@ Implemented electrical topologies:
   share one output voltage and one switching frequency; their powers are
   solved from their individual resonant-tank gain curves.  Component mismatch
   therefore produces current/power imbalance naturally.
-* 3-phase / 120 deg: three-leg, floating-neutral Y-connected LLC primary
-  represented by a per-phase FHA network.  The three branch currents are
-  coupled by the star neutral and the topology-specific per-phase FHA load relation
-  Rac_phase = (24/pi^2) * n^2 * Rload for the implemented center-tap/full-wave
-  shared-output topology.  This is a different electrical model, not three
-  copies of a single-phase LLC.
-
-The 3-phase FHA load relation and floating-neutral coupling are consistent
-with recent three-phase LLC literature.  High-fidelity HB/TD extensions should
-build on this topology model rather than aliasing the single-phase solver.
+* 3-phase / 120 deg: three switching legs, Y-connected resonant tanks and
+  transformer phases, and one shared three-phase six-pulse rectifier.  The FHA
+  load is Rac=(6/pi^2)*n^2*Rdc and the topology gain is M=n*Vo/Vin.  High-
+  fidelity HB/TD use dedicated three-phase hybrid state equations rather than
+  copies of the single-phase solver.
 """
 from __future__ import annotations
 
@@ -39,6 +34,7 @@ from ..core.tank import (
     target_gain,
     tank_state,
     solve_frequency,
+    find_gain_roots,
 )
 
 
@@ -286,31 +282,47 @@ def _solve_parallel_gain_curve(
 
 
 # ---------------------------------------------------------------------------
-# 3-phase, 120-degree, Y-connected floating-neutral LLC
+# 3-phase, 120-degree, Y-connected tanks + shared 6-pulse bridge rectifier
 # ---------------------------------------------------------------------------
 
+@dataclass(frozen=True)
+class ThreePhaseDesignContext:
+    """Balanced fixed-120° three-phase LLC design context.
+
+    This topology is *not* three independent single-phase rectifiers.  Three
+    resonant branches / transformer phases are Y connected and feed one shared
+    three-phase full-bridge rectifier.  The topology-specific FHA reflected
+    load is therefore
+
+        Rac = (6/pi^2) * n^2 * Rdc
+
+    and the normalized DC gain is M = n*Vrect/Vin.
+
+    ``spec`` is a topology-context copy. AUTO_DESIGN may round Np/Ns for the
+    three-phase resonance point; USER_DEFINED preserves the customer's turns
+    exactly. ``tank`` always uses the topology-specific Rac when synthesizing Q.
+    """
+    spec: LLCDesignSpec
+    tank: TankDesign
+    rac_ohm: float
+    dc_load_ohm: float
+    total_power_w: float
+
+
 def three_phase_equivalent_ac_load_ohm(turns_ratio: float, dc_load_ohm: float) -> float:
-    """Per-phase FHA load for the V8.3 three-module Y-LLC topology.
+    """FHA load reflected into one phase of the shared 3P bridge topology.
 
-    The implemented topology follows the classic interleaved Y-LLC structure:
-    three half-bridge LLC modules, transformer primaries connected to a floating
-    star point, and each secondary full-wave/center-tap rectifier feeding the
-    same DC output.  In the balanced case each phase supplies one third of the
-    total DC current, hence its effective DC load is ``3*Rload`` and
-
-        Rac_phase = (8/pi^2) * n^2 * (3 Rload)
-                  = (24/pi^2) * n^2 * Rload.
-
-    This is intentionally *not* the 6/pi^2 relation used by a different
-    three-phase six-pulse rectifier topology.
+    For the balanced Y/Y three-phase LLC with a common six-pulse rectifier,
+    the rectifier-side equivalent resistance is 6*Rdc/pi^2. Reflection through
+    the transformer adds n^2.
     """
     if turns_ratio <= 0 or dc_load_ohm <= 0:
         raise ValueError("turns ratio and dc load must be positive")
-    return turns_ratio**2 * (24.0 / math.pi**2) * dc_load_ohm
+    return turns_ratio**2 * (6.0 / math.pi**2) * dc_load_ohm
 
 
 def _tank_with_rac(spec: LLCDesignSpec, rac_ohm: float) -> TankDesign:
-    """Synthesize/validate one resonant phase using a topology-specific Rac."""
+    """Synthesize/validate one resonant phase using topology-specific Rac."""
     mode = TankParameterMode(spec.parameter_mode)
     if mode == TankParameterMode.USER_DEFINED:
         spec.validate()
@@ -324,123 +336,53 @@ def _tank_with_rac(spec: LLCDesignSpec, rac_ohm: float) -> TankDesign:
     return TankDesign(lr, cr, lm, rac_ohm, zr, spec.ln_ratio, spec.q_full_load, spec.resonant_frequency_hz)
 
 
-def _star_phase_specs_and_tanks(
+def three_phase_design_context(
     spec: LLCDesignSpec,
-    total_power_w: float,
-    overrides: Mapping[int, Mapping[str, object]] | None,
-) -> tuple[tuple[LLCDesignSpec, ...], tuple[TankDesign, ...], float]:
-    # A 3P Y-LLC is physically driven by three half-bridge legs.  AUTO mode
-    # therefore synthesizes a topology-correct turns ratio instead of reusing
-    # a single/full-bridge ratio.  USER_DEFINED keeps the customer's Np/Ns
-    # exactly and merely validates it with the 3P model.
+    *,
+    total_power_w: float | None = None,
+) -> ThreePhaseDesignContext:
+    """Return the balanced 3P topology spec/tank without single-phase fan-out."""
+    p = float(spec.pout_w if total_power_w is None else total_power_w)
+    if p <= 0:
+        raise ValueError("three-phase total power must be positive")
+
+    # Each primary phase is driven by one half-bridge leg, but the *three-phase*
+    # DC gain is M=n*Vrect/Vin.  Do not use the single-phase half-bridge 0.5 gain
+    # when choosing the transformer ratio.  USER_DEFINED never changes Np/Ns.
     if TankParameterMode(spec.parameter_mode) == TankParameterMode.AUTO_DESIGN:
         ns = max(int(spec.secondary_turns), 1)
-        n_target = spec.vbus_nom_v / max(2.0 * (spec.vout_v + spec.rectifier_equivalent_drop_v), 1e-12)
+        n_target = spec.vbus_nom_v / max(spec.vout_v + spec.rectifier_equivalent_drop_v, 1e-12)
         np_auto = max(1, int(round(n_target * ns)))
-        base = spec.clone(primary_topology=PrimaryTopology.HALF_BRIDGE, primary_turns=np_auto, secondary_turns=ns)
+        ps = spec.clone(
+            primary_topology=PrimaryTopology.HALF_BRIDGE,
+            primary_turns=np_auto,
+            secondary_turns=ns,
+            pout_w=p,
+        )
     else:
-        base = spec.clone(primary_topology=PrimaryTopology.HALF_BRIDGE)
+        ps = spec.clone(primary_topology=PrimaryTopology.HALF_BRIDGE, pout_w=p)
 
-    # Balanced nominal design point: each rectifier supplies Ptotal/3, so each
-    # phase sees three times the system DC load.  This sets the design Q.
-    _, rdc_sys = _rectifier_dc_proxy(base, base.vout_v, total_power_w)
-    rac_nom = three_phase_equivalent_ac_load_ohm(base.turns_ratio, rdc_sys)
-    ov = overrides or {}; specs = []; tanks = []
-    for i in range(3):
-        ps = base.clone(**dict(ov.get(i, {}))) if i in ov else base.clone()
-        # A per-phase override may change Np/Ns, therefore Rac must follow it.
-        rac_i = rac_nom if abs(ps.turns_ratio - base.turns_ratio) < 1e-15 else three_phase_equivalent_ac_load_ohm(ps.turns_ratio, rdc_sys)
-        specs.append(ps); tanks.append(_tank_with_rac(ps, rac_i))
-    return tuple(specs), tuple(tanks), rac_nom
+    _vrect, rdc = _rectifier_dc_proxy(ps, ps.vout_v, p)
+    rac = three_phase_equivalent_ac_load_ohm(ps.turns_ratio, rdc)
+    tank = _tank_with_rac(ps, rac)
+    return ThreePhaseDesignContext(ps, tank, rac, rdc, p)
 
 
-@dataclass(frozen=True)
-class _StarFHAState:
-    output_voltage_v: float
-    total_power_w: float
-    phase_power_w: tuple[float, ...]
-    phase_current_rms_a: tuple[float, ...]
-    phase_gain: tuple[float, ...]
-    phase_impedance_angle_deg: tuple[float, ...]
-    neutral_voltage_rms_v: complex
-    q_effective: tuple[float, ...]
-    phase_current_angle_deg: tuple[float, ...]
-    effective_source_rms_v: tuple[float, ...]
-    phase_rac_ohm: tuple[float, ...]
-    phase_power_error_w: tuple[float, ...]
-    reflected_load_current_rms_a: tuple[float, ...]
-    reflected_load_current_angle_deg: tuple[float, ...]
-
-
-def _star_fha_state(
-    spec: LLCDesignSpec,
-    phase_specs: tuple[LLCDesignSpec, ...],
-    tanks: tuple[TankDesign, ...],
-    *,
-    frequency_hz: float,
-    vbus_v: float,
-    output_voltage_v: float,
-    phase_power_w: tuple[float, float, float],
-) -> _StarFHAState:
-    """Evaluate the coupled star network for an assumed power split.
-
-    Each secondary rectifier feeds the same DC output voltage.  Its FHA load is
-    therefore a nonlinear function of that phase's *actual* power share.  The
-    caller solves ``Pcalc_i == Passumed_i``; this is what lets component
-    mismatch change current sharing without inventing three independent output
-    voltages.
-    """
-    vo = max(float(output_voltage_v), 1e-9)
-    w = 2.0 * math.pi * frequency_hz
-    # Fundamental RMS of a +/-Vin/2 half-bridge pole square wave.
-    vfund = math.sqrt(2.0) / math.pi * vbus_v
-    angles = np.deg2rad(np.asarray((0.0, -120.0, 120.0)))
-    vs = vfund * np.exp(1j * angles)
-
-    rac = np.asarray([
-        _parallel_rac_for_power(ps, vo, max(float(p), 1e-9))
-        for ps, p in zip(phase_specs, phase_power_w)
-    ], dtype=float)
-    ztot = []; zpar = []
-    for t, r in zip(tanks, rac):
-        zs = 1j * w * t.lr_h + 1.0 / (1j * w * t.cr_f)
-        zlm = 1j * w * t.lm_h
-        zp = 1.0 / (1.0 / r + 1.0 / zlm)
-        zpar.append(zp); ztot.append(zs + zp)
-    ztot = np.asarray(ztot, dtype=complex); zpar = np.asarray(zpar, dtype=complex)
-
-    # Floating-star KCL: sum_i (Vi - Vn)/Zi = 0.
-    y = 1.0 / ztot
-    vn = complex(np.sum(vs * y) / np.sum(y))
-    veff = vs - vn
-    currents = veff / ztot
-    vp = currents * zpar
-
-    # AC load power is the rectifier-input transferred power.  Convert back to
-    # useful DC output power after the configured equivalent rectifier drop.
-    p_ac = np.abs(vp) ** 2 / rac
-    dc_scale = vo / max(vo + spec.rectifier_equivalent_drop_v, 1e-30)
-    p_calc = p_ac * dc_scale
-    pgain = np.divide(np.abs(vp), np.maximum(np.abs(veff), 1e-30))
-    iload = vp / rac
-    q = tuple(float(t.zr_ohm / r) for t, r in zip(tanks, rac))
-    assumed = np.asarray(phase_power_w, dtype=float)
-    return _StarFHAState(
-        vo,
-        float(np.sum(p_calc)),
-        tuple(float(v) for v in p_calc),
-        tuple(float(abs(v)) for v in currents),
-        tuple(float(v) for v in pgain),
-        tuple(float(np.degrees(np.angle(z))) for z in ztot),
-        vn,
-        q,
-        tuple(float(np.degrees(np.angle(v))) for v in currents),
-        tuple(float(abs(v)) for v in veff),
-        tuple(float(v) for v in rac),
-        tuple(float(v) for v in (p_calc - assumed)),
-        tuple(float(abs(v)) for v in iload),
-        tuple(float(np.degrees(np.angle(v))) for v in iload),
-    )
+def _select_3p_fha_frequency(tank: TankDesign, *, rac_ohm: float, required_m: float,
+                             fmin_hz: float, fmax_hz: float) -> float:
+    roots = find_gain_roots(tank, rac_ohm, required_m, fmin_hz, fmax_hz)
+    if not roots:
+        freqs = np.geomspace(fmin_hz, fmax_hz, 800)
+        vals = np.asarray([gain(tank, float(f), rac_ohm) for f in freqs])
+        raise RuntimeError(
+            f"3P FHA required M={required_m:.5f} is outside available "
+            f"{float(np.min(vals)):.5f}..{float(np.max(vals)):.5f}"
+        )
+    if required_m <= 1.0:
+        preferred = [f for f in roots if f >= tank.fr_hz * (1.0 - 1e-8)]
+        return float(min(preferred) if preferred else min(roots, key=lambda f: abs(f - tank.fr_hz)))
+    preferred = [f for f in roots if f <= tank.fr_hz * (1.0 + 1e-8)]
+    return float(max(preferred) if preferred else min(roots, key=lambda f: abs(f - tank.fr_hz)))
 
 
 def _solve_star_electrical_point(
@@ -450,49 +392,46 @@ def _solve_star_electrical_point(
     load_fraction: float,
     phase_spec_overrides: Mapping[int, Mapping[str, object]] | None,
 ) -> InterleavedElectricalPoint:
-    target_power = spec.pout_w * float(load_fraction)
-    phase_specs, tanks, _ = _star_phase_specs_and_tanks(spec, target_power, phase_spec_overrides)
-    fmin = max(ps.minimum_frequency_hz for ps in phase_specs); fmax = min(ps.maximum_frequency_hz for ps in phase_specs)
-    p0 = np.full(3, target_power / 3.0, dtype=float)
-
-    # Balanced single-module-at-1/3-load gives a strong frequency seed.  The
-    # nonlinear solve then permits mismatch and floating-neutral coupling.
-    try:
-        ps0 = phase_specs[0].clone(pout_w=target_power / 3.0)
-        t0 = tanks[0]
-        fseed = solve_frequency(t0, ps0, _parallel_rac_for_power(ps0, spec.vout_v, target_power / 3.0), target_gain(ps0, vbus_v)).frequency_hz
-    except Exception:
-        fseed = float(np.mean([t.fr_hz for t in tanks]))
-    x0 = np.r_[math.log(float(np.clip(fseed, fmin, fmax))), np.log(np.maximum(p0, 1e-6))]
-    lower = np.r_[math.log(fmin), np.log(np.full(3, max(target_power * 1e-6, 1e-6)))]
-    upper = np.r_[math.log(fmax), np.log(np.full(3, max(target_power * 3.0, 1.0)))]
-
-    def residual(x: np.ndarray) -> np.ndarray:
-        fs = float(math.exp(x[0])); powers = tuple(float(v) for v in np.exp(x[1:]))
-        st = _star_fha_state(spec, phase_specs, tanks, frequency_hz=fs, vbus_v=vbus_v, output_voltage_v=spec.vout_v, phase_power_w=powers)
-        scale = max(target_power / 3.0 * 0.005, 0.5)
-        out = [(pc - pa) / scale for pc, pa in zip(st.phase_power_w, powers)]
-        out.append((sum(powers) - target_power) / max(target_power * 0.005, 1.0))
-        return np.asarray(out, dtype=float)
-
-    sol = least_squares(residual, x0, bounds=(lower, upper), xtol=1e-13, ftol=1e-13, gtol=1e-13, max_nfev=3000, x_scale="jac")
-    fs = float(math.exp(sol.x[0])); powers = tuple(float(v) for v in np.exp(sol.x[1:]))
-    state = _star_fha_state(spec, phase_specs, tanks, frequency_hz=fs, vbus_v=vbus_v, output_voltage_v=spec.vout_v, phase_power_w=powers)
-    rnorm = float(np.linalg.norm(residual(sol.x), ord=np.inf)); exact = bool(sol.success and rnorm <= 2e-3)
-    warnings: list[str] = []
-    if not exact:
-        warnings.append(f"3P Y-LLC self-consistent load-share solution residual is {rnorm:.3e}; result is a bounded best-fit.")
-
-    total = float(sum(powers)); avg = total / 3.0; phase_points = []
-    for i, (off, t, p, q, g, angle, ir) in enumerate(zip(fixed_phase_offsets_deg(3), tanks, powers, state.q_effective, state.phase_gain, state.phase_impedance_angle_deg, state.phase_current_rms_a)):
-        phase_points.append(PhaseElectricalPoint(i + 1, off, p, 100.0 * p / max(total, 1e-12), q, g, g, angle, ir, t, state.phase_current_angle_deg[i], state.effective_source_rms_v[i], phase_specs[i].turns_ratio, phase_specs[i].primary_turns, phase_specs[i].secondary_turns, state.reflected_load_current_rms_a[i], state.reflected_load_current_angle_deg[i]))
-    imbalance = (max(powers) - min(powers)) / max(avg, 1e-12) * 100.0
-    if imbalance > 2.0:
-        warnings.append(f"3P floating-neutral tank mismatch produces {imbalance:.3f}% phase-power imbalance.")
-    neutral_ref = math.sqrt(2.0) / math.pi * vbus_v
-    if abs(state.neutral_voltage_rms_v) > 0.01 * neutral_ref:
-        warnings.append(f"Floating-star neutral displacement is {abs(state.neutral_voltage_rms_v):.3f} Vrms; phase coupling is active.")
-    return InterleavedElectricalPoint(3, fixed_phase_offsets_deg(3), fs, spec.vout_v, total, tuple(phase_points), tuple(warnings), exact, rnorm, MultiphaseTopology.THREE_PHASE_STAR_120)
+    if phase_spec_overrides:
+        raise NotImplementedError(
+            "The shared 3P bridge high-accuracy model currently assumes balanced tank parameters. "
+            "Per-phase mismatch cannot be represented by independent phase Rac values; use the balanced "
+            "3P solver until the full asymmetric diode-complementarity model is available."
+        )
+    ptotal = spec.pout_w * float(load_fraction)
+    ctx = three_phase_design_context(spec, total_power_w=ptotal)
+    ps, tank, rac = ctx.spec, ctx.tank, ctx.rac_ohm
+    vrect = spec.vout_v + spec.rectifier_equivalent_drop_v
+    required_m = ps.turns_ratio * vrect / vbus_v
+    fs = _select_3p_fha_frequency(
+        tank, rac_ohm=rac, required_m=required_m,
+        fmin_hz=ps.minimum_frequency_hz, fmax_hz=ps.maximum_frequency_hz,
+    )
+    st = tank_state(tank, fs, rac)
+    source_rms = math.sqrt(2.0) / math.pi * vbus_v
+    ir_rms = abs(source_rms / st.z_input_ohm)
+    vp = (source_rms / st.z_input_ohm) * st.z_parallel_ohm
+    iload = vp / rac
+    q = tank.zr_ohm / rac
+    phase_power = ptotal / 3.0
+    phases = tuple(
+        PhaseElectricalPoint(
+            i + 1, off, phase_power, 100.0 / 3.0, q,
+            st.gain, required_m, st.input_phase_deg, ir_rms, tank,
+            off - st.input_phase_deg, source_rms, ps.turns_ratio,
+            ps.primary_turns, ps.secondary_turns,
+            abs(iload), math.degrees(math.atan2(iload.imag, iload.real)) + off,
+        )
+        for i, off in enumerate(fixed_phase_offsets_deg(3))
+    )
+    warnings = (
+        "3P FHA uses the balanced Y-connected resonant tanks and one shared six-pulse rectifier; "
+        "it is not a three-cell single-phase fan-out.",
+    )
+    return InterleavedElectricalPoint(
+        3, fixed_phase_offsets_deg(3), fs, spec.vout_v, ptotal, phases,
+        warnings, True, abs(st.gain - required_m), MultiphaseTopology.THREE_PHASE_STAR_120,
+    )
 
 
 def _solve_star_gain_curve(
@@ -503,39 +442,21 @@ def _solve_star_gain_curve(
     phase_spec_overrides: Mapping[int, Mapping[str, object]] | None,
     points: int,
 ) -> SystemGainCurve:
-    target_power_nom = spec.pout_w * float(load_fraction)
-    phase_specs, tanks, _ = _star_phase_specs_and_tanks(spec, target_power_nom, phase_spec_overrides)
-    fmin = max(ps.minimum_frequency_hz for ps in phase_specs); fmax = min(ps.maximum_frequency_hz for ps in phase_specs)
-    freqs = np.geomspace(fmin, fmax, int(points)); vo_arr = np.full_like(freqs, np.nan); p_arrays = [np.full_like(freqs, np.nan) for _ in range(3)]
-    # The user-selected work point defines the physical output resistance used
-    # for a frequency sweep; output voltage/power are allowed to move.
-    rload = spec.vout_v**2 / max(target_power_nom, 1e-12)
-    pseed = np.full(3, target_power_nom / 3.0, dtype=float)
-    prev = np.r_[math.log(max(spec.vout_v, 0.1)), np.log(np.maximum(pseed, 1e-6))]
-    lower = np.r_[math.log(max(0.03 * spec.vout_v, 0.02)), np.log(np.full(3, max(target_power_nom * 1e-7, 1e-6)))]
-    upper = np.r_[math.log(max(3.0 * spec.vout_v, 2.0)), np.log(np.full(3, max(target_power_nom * 4.0, 1.0)))]
-
-    for k, f in enumerate(freqs):
-        def residual(x: np.ndarray) -> np.ndarray:
-            vo = float(math.exp(x[0])); powers = tuple(float(v) for v in np.exp(x[1:]))
-            st = _star_fha_state(spec, phase_specs, tanks, frequency_hz=float(f), vbus_v=vbus_v, output_voltage_v=vo, phase_power_w=powers)
-            p_load = vo * vo / rload
-            phase_scale = max(p_load / 3.0 * 0.01, 0.25)
-            out = [(pc - pa) / phase_scale for pc, pa in zip(st.phase_power_w, powers)]
-            out.append((sum(powers) - p_load) / max(p_load * 0.01, 0.5))
-            return np.asarray(out, dtype=float)
-
-        nominal = np.r_[math.log(max(spec.vout_v, 0.1)), np.log(np.maximum(pseed, 1e-6))]
-        candidates = []
-        for seed in (prev, nominal):
-            sol = least_squares(residual, seed, bounds=(lower, upper), xtol=3e-11, ftol=3e-11, gtol=3e-11, max_nfev=1000, x_scale="jac")
-            rn = float(np.linalg.norm(residual(sol.x), ord=np.inf)); candidates.append((rn, sol))
-        rn, sol = min(candidates, key=lambda z: z[0])
-        if (not sol.success) or rn > 0.08:
-            continue
-        prev = sol.x.copy(); vo = float(math.exp(sol.x[0])); powers = np.exp(sol.x[1:]); vo_arr[k] = vo
-        for i, pwr in enumerate(powers): p_arrays[i][k] = float(pwr)
-    return SystemGainCurve(freqs, vo_arr / vbus_v, vo_arr, tuple(p_arrays), target_power_nom, MultiphaseTopology.THREE_PHASE_STAR_120)
+    if phase_spec_overrides:
+        raise NotImplementedError("3P shared-bridge gain curve currently supports balanced phase parameters only")
+    pnom = spec.pout_w * float(load_fraction)
+    ctx = three_phase_design_context(spec, total_power_w=pnom)
+    ps, tank, rac = ctx.spec, ctx.tank, ctx.rac_ohm
+    freqs = np.geomspace(ps.minimum_frequency_hz, ps.maximum_frequency_hz, int(points))
+    m = np.asarray([gain(tank, float(f), rac) for f in freqs], dtype=float)
+    vo = np.maximum(m * vbus_v / ps.turns_ratio - spec.rectifier_equivalent_drop_v, 0.0)
+    rload = spec.vout_v**2 / max(pnom, 1e-30)
+    ptotal = vo * vo / rload
+    pphase = tuple((ptotal / 3.0).copy() for _ in range(3))
+    return SystemGainCurve(
+        freqs, vo / vbus_v, vo, pphase, pnom,
+        MultiphaseTopology.THREE_PHASE_STAR_120,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -568,9 +489,9 @@ def solve_system_gain_curve(
 ) -> SystemGainCurve:
     """Return the topology-specific *system* DC gain curve Vo/Vin.
 
-    2P solves common-output load sharing for two independent cells.  3P uses
-    the Y-connected floating-neutral FHA network and topology-specific per-phase Rac relation.
-    The curve is never copied from a single-phase full-power model.
+    2P solves common-output load sharing for two independent cells. 3P uses
+    the Y/Y shared-six-pulse-rectifier topology-specific FHA relation. The
+    curve is never copied from a single-phase full-power model.
     """
     vbus = float(spec.vbus_nom_v if vbus_v is None else vbus_v)
     topology = topology_for_phase_count(phase_count)
@@ -582,5 +503,6 @@ def solve_system_gain_curve(
 __all__ = [
     "MultiphaseTopology", "PhaseElectricalPoint", "InterleavedElectricalPoint", "SystemGainCurve",
     "fixed_phase_offsets_deg", "topology_for_phase_count", "three_phase_equivalent_ac_load_ohm",
+    "ThreePhaseDesignContext", "three_phase_design_context",
     "solve_phase_power_at_frequency", "solve_interleaved_electrical_point", "solve_system_gain_curve",
 ]

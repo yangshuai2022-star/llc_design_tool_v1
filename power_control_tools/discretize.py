@@ -27,6 +27,22 @@ def _mapped_polynomial(coeff_desc: np.ndarray, k: float, common_degree: int) -> 
     return out
 
 
+
+def _mapped_polynomial_backward(coeff_desc: np.ndarray, k: float) -> np.ndarray:
+    """Return q=z^-1 ascending coefficients after s=K(1-q).
+
+    Unlike scipy.cont2discrete this also supports intentionally improper
+    analog controllers such as an ideal PID derivative term.
+    """
+    coeff_desc = _trim_leading(coeff_desc)
+    degree = len(coeff_desc) - 1
+    out = np.zeros(degree + 1, dtype=float)
+    for idx, c in enumerate(coeff_desc):
+        pwr = degree - idx
+        term = np.asarray([math.comb(pwr, j) * ((-1.0) ** j) for j in range(pwr + 1)], dtype=float)
+        out[:len(term)] += float(c) * (k ** pwr) * term
+    return out
+
 def discretize_transfer_function(
     analog: AnalogTransferFunction,
     sample_rate_hz: float,
@@ -40,9 +56,8 @@ def discretize_transfer_function(
     method = DiscretizationMethod(method)
     b, a = analog.arrays()
     if method == DiscretizationMethod.BACKWARD_EULER:
-        numd, dend, _ = signal.cont2discrete((b, a), 1.0/fs, method="backward_diff")[:3]
-        bd = np.asarray(numd).reshape(-1)
-        ad = np.asarray(dend).reshape(-1)
+        bd = _mapped_polynomial_backward(b, fs)
+        ad = _mapped_polynomial_backward(a, fs)
     else:
         if method == DiscretizationMethod.PREWARP_TUSTIN:
             if prewarp_frequency_hz is None or prewarp_frequency_hz <= 0 or prewarp_frequency_hz >= fs/2:
