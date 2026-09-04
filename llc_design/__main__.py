@@ -53,6 +53,15 @@ from .switching.sr import analyze_sr, export_sr_lut_c99, generate_sr_lut
 from .multiphase import solve_interleaved_llc
 from .magnetics.v8 import analyze_golden_magnetics
 
+from power_sim import (
+    ControllerLimitConfig, SamplerConfig, LLCFMConfig, LLCFMMode,
+    PWMCountMode as SimPWMCountMode, ClosedLoopTiming, ClosedLoopScenario, StepProfile,
+    FirstOrderLLCPlant, run_closed_loop, analyze_linear_closed_loop,
+)
+from power_control_tools import (
+    ControllerKind as ToolControllerKind, DiscretizationMethod, design_controller, discretize_transfer_function,
+)
+
 
 def _base_spec(config: str | None) -> LLCDesignSpec:
     return load_spec(config) if config else LLCDesignSpec()
@@ -659,6 +668,57 @@ def v8_magnetics(config, vbus, load_fraction):
     m=analyze_golden_magnetics(spec,result,system.transformer)
     click.echo(f"Core={m.core_loss_w:.3f} W, CuP={m.primary_copper_w:.3f} W, CuS={m.secondary_copper_w:.3f} W, total={m.total_loss_w:.3f} W")
     click.echo(f"Bpk={m.b_peak_t*1e3:.2f} mT, Llk={m.leakage_inductance_h*1e6:.3f} uH, Cps={m.primary_secondary_capacitance_f*1e12:.1f} pF, hotspot={m.hotspot_c:.1f} C")
+
+
+@cli.command("closed-loop-selftest")
+@click.option("--controller", "controller_name", type=click.Choice(["pi","pif","pid","pidf","2p2z"]), default="pi", show_default=True)
+@click.option("--control-khz", type=float, default=40.0, show_default=True)
+@click.option("--kp", type=float, default=0.06, show_default=True)
+@click.option("--ti-ms", type=float, default=3.0, show_default=True)
+@click.option("--td-us", type=float, default=100.0, show_default=True)
+@click.option("--lpf-khz", type=float, default=3.5, show_default=True)
+@click.option("--duration-ms", type=float, default=30.0, show_default=True)
+def closed_loop_selftest(controller_name, control_khz, kp, ti_ms, td_us, lpf_khz, duration_ms):
+    """Run the V9 digital scheduler against a deterministic inverse-gain LLC surrogate.
+
+    This regression validates Sampler -> C(z) -> FM/TBPRD -> event scheduling
+    without requiring an external simulator.  It is a digital-control runtime
+    test, not a power-stage accuracy result.
+    """
+    fs = control_khz * 1e3
+    kind = ToolControllerKind(controller_name)
+    kwargs = {"kp": kp, "ti_s": ti_ms * 1e-3, "td_s": td_us * 1e-6,
+              "lpf_pole_hz": lpf_khz * 1e3, "gain": kp,
+              "fz1_hz": 300.0, "fz2_hz": 1200.0, "fp1_hz": 4000.0, "fp2_hz": 12000.0}
+    analog = design_controller(kind, **kwargs)
+    controller = discretize_transfer_function(analog, fs, DiscretizationMethod.TUSTIN)
+    plant = FirstOrderLLCPlant()
+    mod = LLCFMConfig(mode=LLCFMMode.LINEAR_FM, nominal_frequency_hz=100_000.0,
+                      kfm_hz_per_unit=-20_000.0, minimum_frequency_hz=70_000.0,
+                      maximum_frequency_hz=180_000.0, tbclk_hz=120e6,
+                      count_mode=SimPWMCountMode.UP_DOWN)
+    linear = analyze_linear_closed_loop(controller, plant.discrete_transfer(fs),
+                                        modulator_gain=mod.kfm_hz_per_unit, delay_samples=1)
+    result = run_closed_loop(
+        plant,
+        controller=controller,
+        controller_limits=ControllerLimitConfig(-0.8, 0.8),
+        sampler=SamplerConfig(sample_rate_hz=fs, sample_phase_s=min(2e-6, 0.2/fs),
+                              gain=0.05, adc_bits=12, adc_min=0.0, adc_max=3.3),
+        modulator=mod,
+        timing=ClosedLoopTiming(duration_s=duration_ms*1e-3,
+                                computation_delay_s=1e-6, pwm_update_delay_s=2e-6),
+        scenario=ClosedLoopScenario(reference_v=StepProfile(53.0, 5e-3, 54.0)),
+    )
+    d = result.diagnostics
+    click.echo("V9 closed-loop scheduler self-test (digital-control runtime)")
+    click.echo(f"Linear closed-loop: stable={linear.stable}, pole_radius={linear.max_pole_radius:.8f}, PM={linear.phase_margin_deg}, GM={linear.gain_margin_db}, Fc={linear.crossover_hz}")
+    click.echo(f"Event simulation: converged={d.converged}, error={d.regulation_error_v:.5f} V, std={d.output_std_v:.5f} V, overshoot={d.overshoot_percent:.3f}%")
+    click.echo(f"Saturation: controller={100*d.controller_saturation_fraction:.2f}%, modulator={100*d.modulator_saturation_fraction:.2f}%")
+    click.echo(f"Limit-cycle={d.limit_cycle_detected}, dominant oscillation={d.dominant_oscillation_hz}")
+    for note in d.notes:
+        click.echo(f"  - {note}")
+
 
 if __name__ == "__main__":
     cli()

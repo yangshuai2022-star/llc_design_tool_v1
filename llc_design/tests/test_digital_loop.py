@@ -137,3 +137,37 @@ def test_generated_controller_c99_compiles(tmp_path: Path):
         capture_output=True,
         text=True,
     )
+
+
+def test_control_tools_hz_links_directly_into_llc_closed_loop():
+    from power_control_tools import ControllerKind as ToolControllerKind
+    from power_control_tools import DiscretizationMethod, design_controller, discretize_transfer_function
+
+    fs = 50_000.0
+    analog = design_controller(
+        ToolControllerKind.PIF,
+        kp=0.003,
+        ti_s=2.5e-3,
+        lpf_pole_hz=4_000.0,
+    )
+    external = discretize_transfer_function(analog, fs, DiscretizationMethod.TUSTIN)
+    spec = LLCDesignSpec()
+    system = LLCSystemAnalyzer().analyze(spec)
+    small = build_small_signal_analysis(spec, system_analysis=system, sample_time_s=1.0 / fs)
+
+    result = build_digital_loop_analysis(
+        small,
+        controller_transfer_function=external,
+        controller_source="Control Tools / PIF",
+        command_timing=CommandTimingConfig(computation_delay_s=1e-6),
+    )
+
+    ext = external.normalized()
+    assert result.controller_source == "Control Tools / PIF"
+    assert result.controller_config is None
+    assert result.controller.sample_time_s == pytest.approx(1.0 / fs)
+    assert result.controller.numerator == pytest.approx(ext.b)
+    assert result.controller.denominator == pytest.approx(ext.a)
+    assert np.all(np.isfinite(result.responses["open_loop_nominal"]))
+    assert len(result.discrete_approximation.closed_loop_poles) > 0
+    assert any("linked directly from Control Tools" in w for w in result.warnings)

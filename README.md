@@ -1,4 +1,4 @@
-# Power Design Toolkit V8.3-alpha2
+# Power Design Toolkit V9
 
 Integrated engineering design and control-analysis toolkit for:
 
@@ -6,9 +6,7 @@ Integrated engineering design and control-analysis toolkit for:
 - **Single-phase TTPL PFC**: firmware-shaped dual-loop control, three sensing chains, open-loop Bode analysis, full settled AC-cycle solver, zero-crossing analyzer, workpoint-derived switching waveforms, PF/THD/harmonics.
 - **Three-phase Vienna PFC**: DC-voltage outer loop + three ABC stationary-frame current loops, split-bus midpoint balance, three-phase sensing, common-mode/third-harmonic modulation support, full line-cycle solver, sector analysis, workpoint-derived three-level switching waveforms and per-phase PF/THD.
 
-V8.2 extends the V8.1 multi-fidelity LLC core with rectifier complementarity, Golden-waveform magnetics, digital SR timing/loss and fixed-phase interleaved LLC. V8.1 introduced a common FHA / nonlinear multi-harmonic / switched-periodic interface, model comparison, waveform export and GUI/CLI integration. Existing V7 design flows remain available.
-
-V8.3-alpha1 added the Auto-Design / User-Defined dual LLC tank parameter workflow, the fixed 90° two-phase interleaved LLC electrical/load-sharing model, and a reusable `power_control_tools` package for controller/filter design (S2Z discretization, IIR/FIR filters, Bode/step/impulse/pole-zero/group-delay analysis, single-file C99 float32_t DF2T/SOS export). V8.3-alpha2 extends the controller set with PIF / PID / PIDF and analog Type-II / Type-III (pole-zero and op-amp R/C parameterization), splits Controller and Filter Designer into separate pages, adds live H(s)/H(z) feedback, and introduces a dedicated 3-phase 120° Y-connected LLC MVP. The nonlinear 3-phase high-fidelity solver is still in progress and is not a final hardware-signoff model.
+V9 consolidates the Toolkit around its native engineering and digital-control chain. GeckoCIRCUITS integration experiments have been removed from the formal baseline. The V9 focus is Control Tools → exact H(z) linkage → LLC/PFC small-signal plants → sampler/ADC → modulator/PWM → complete closed-loop stability analysis → single-file C99 controller export.
 
 ## 开发时间线 / Development Timeline
 
@@ -44,12 +42,8 @@ Legend: 🚀 Feature · 🐛 Bugfix · 🎨 GUI/UX · 🧪 Test/CI/Build
 | 2026-09-03 / V8.0 | 🚀 | LLC 分析架构重构：统一工作点请求、收敛状态、Golden Waveform、指标与模型比较数据结构；保留 V7 API |
 | 2026-09-03 / V8.2 | 🚀 | 新增 DCM ON+/OPEN/ON− 互补整流、SR Qrr/第三象限/Timing/LUT/Loss、Golden 磁性损耗与寄生参数 |
 | 2026-09-03 / V8.2 | ⚡ | 新增固定 90° 双相与固定 120° 三相 Interleaved LLC 引擎及 GUI 页面 |
-| 2026-09-03 / V8.2 | 🎨 | 启动脚本重命名与修复：`OPEN_GUI_WIN.bat` / `OPEN_GUI_MACOS.command` / `run_gui.sh`（venv 优先、Python≥3.10 校验、`[gui]` 依赖自装、CRLF/LF 规范，移除机器相关硬编码路径与中文文件名） |
 | 2026-09-03 / V8.1 | 🚀 | 新增自洽非线性多谐波 HB（1/3/5/7 次自适应）、精确换向零点投影、FHA/HB/分段时域比较、CLI/GUI 与导出 |
 | 2026-09-03 / V8.1 | 🧪 | 新增多谐波物理一致性、轻载分支降级、Golden 参考选择和导出回归测试；完成全仓库测试与 wheel 构建 |
-| 2026-09-04 / V8.3-alpha1 | 🚀 | LLC 参数双模式（Auto Design / User Defined 通真保留 Lr/Cr/Lm/Np/Ns）；固定 90° 双相 Interleaved LLC 电气/均流模型；新 power_control_tools：S2Z 离散化（Tustin / 预畸变 / 后向欧拉）、IIR/FIR 滤波器、Bode / 群延迟 / 阶跃 / 脉冲 / 零极点 / 传递函数、C99 float32_t DF2T/SOS 导出 |
-| 2026-09-04 / V8.3-alpha2 | 🚀 | 3P/120 LLC MVP（专用 Y 联结 / 共享六脉整流 FHA 生成增益与工作点，专用 3P TD/HB 参考求解器带收敛告警）；控制器 UI 只露所选类型参数；PI 改 Kp·(1+1/(Ti·s))；新增 PIF / PID / PIDF / 模拟 Type-II / Type-III（Pole-Zero 与 R/C 参数化）；实时 H(s)/H(z)；Controller 与 Filter 设计器分页；单文件 header-only C99 |
-| 2026-09-04 / V8.3-alpha2 | 🐛 | 修复 Control Tools GUI 构造时序竞态：QTabWidget.addTab 首个页面触发 currentChanged，访问尚未构建的 filter_impl（AttributeError）；并将防抖 QTimer 提前到参数页构建前。经 offscreen Qt 验证窗口可干净构建、双设计页与全部分析 tab 正常 |
 
 ## Install
 
@@ -96,16 +90,6 @@ power-design-gui
 ```
 
 The launcher first asks whether to enter **LLC Design** or **PFC Design**. Both top-level windows preserve their state while switching.
-
-### One-click launchers
-
-Double-click / run the platform launcher from the project root. Each one creates `./.venv` on first run (Python >=3.10), installs the `[gui]` extras if missing, then starts the GUI — no manual setup required.
-
-| File | Platform | Action |
-| --- | --- | --- |
-| `OPEN_GUI_WIN.bat` | Windows | double-click |
-| `OPEN_GUI_MACOS.command` | macOS | double-click |
-| `run_gui.sh` | Linux / WSL | `bash run_gui.sh` |
 
 ## LLC V8.1 multi-fidelity analysis
 
@@ -373,5 +357,40 @@ The GUI toolbar (top-right, LLC and PFC workspaces) shows the author's contact i
 
 ## License
 
-MIT License — see [LICENSE](LICENSE).
+GNU GPL v3 — see [LICENSE](LICENSE).
 
+
+
+## V9 — Digital Control & Closed-Loop Baseline
+
+V9 makes the Digital Control Tools a first-class controller source for the LLC loop analysis. The exact discrete transfer function designed in Control Tools is linked directly into the LLC small-signal closed-loop calculation; no PI/PID parameter re-fit is performed.
+
+Canonical chain:
+
+```text
+Control Tools H(s)
+        ↓ discretization
+Control Tools H(z)
+        ↓ exact coefficient linkage
+LLC Gvf(s) / Gvf(z)
+        ↓
+Sampler / ADC / sensing
+        ↓
+FM LUT / TBPRD modulator / PWM delay
+        ↓
+L(z), T(z), S(z), PM, GM, Fc, closed-loop poles
+        ↓
+Single-file float32_t C99 controller export
+```
+
+The LLC **Digital Loop** page shows the active controller source. When a Control Tools controller is available, **Use current Control Tools H(z)** is enabled and selected by default. The loop sample time follows the Control Tools sample rate so the controller and discrete plant remain on the same z-domain clock.
+
+The formal V9 baseline intentionally does not require Java, GeckoCIRCUITS or any external circuit simulator.
+
+Developer runtime regression:
+
+```bash
+python -m llc_design closed-loop-selftest
+```
+
+See `V9_DIGITAL_CONTROL_BASELINE.md` for the numerical contract and validation scope.

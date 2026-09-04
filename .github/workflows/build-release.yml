@@ -39,7 +39,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install pyinstaller
-          python -m pip install -e ".[gui,dev,web]" httpx
+          python -m pip install -e ".[gui,dev]"
 
       - name: Run tests
         run: python -m pytest
@@ -48,9 +48,7 @@ jobs:
         run: |
           python -m PyInstaller --noconfirm --clean --windowed --name PowerDesignTool \
             --collect-data llc_design --collect-data pfc_design --collect-data power_codegen \
-            --collect-data power_control_tools \
             --collect-submodules llc_design --collect-submodules pfc_design --collect-submodules power_codegen \
-            --collect-submodules power_control_tools \
             packaging/launcher.py
         shell: bash
 
@@ -80,63 +78,39 @@ jobs:
           files: ${{ matrix.zip-name }}
           generate_release_notes: true
           body: |
-            Power Design Toolkit V8.3.0 双平台安装包（自动构建）
+            Power Design Toolkit V8.1 双平台安装包（自动构建）
 
-            ## V8.3 主要功能（在 V8.2 多保真核心之上增量）
-            - LLC 参数双模式：Auto Design / User Defined（通真保留 Lr/Cr/Lm/Np/Ns）
-            - 固定 90° 双相 Interleaved LLC 电气/均流模型
-            - power_control_tools：S2Z 离散化（Tustin / 预畸变 / 后向欧拉）、IIR/FIR 滤波器（Butterworth/Bessel/Chebyshev/Elliptic/Notch/FIR/MA/DC-Blocker）、Bode / 群延迟 / 阶跃 / 脉冲 / 零极点分析、C99 float32_t 单文件 DF2T/SOS 导出
-            - 控制器扩展：PI（Kp·(1+1/(Ti·s))）、PIF、PID、PIDF、模拟 Type-II / Type-III（Pole-Zero 与 R/C 参数化）
-            - Controller 与 Filter 设计器分页；实时 H(s)/H(z)
-            - 3 相 120° LLC MVP（专用 Y 联结 / 共享六脉整流 FHA；3P TD/HB 参考求解器带收敛告警；非线性 3P 高保真求解器仍为 WIP，非最终 signoff 模型）
-            - 修复 Control Tools GUI 构造时序竞态（filter_impl AttributeError）
+            ## V8.1 主要功能
+            - LLC V8.0 统一 FHA / 多谐波 HB / 分段时域分析接口与 Golden Waveform 数据层
+            - LLC V8.1 自洽非线性多谐波求解、精确换向零点投影、模型误差对比与 CSV/JSON/Markdown 导出
+            - GUI 新增 FHA / HB / TD 对比页与多谐波 HB 波形入口；CLI 新增 `model-compare`
+            - GUI 自动适配 Windows 11 深色/浅色主题：启动时检测系统外观并切换配色，
+              解决深色主题下浅色背景 + 跟随系统的浅色文字导致整屏不可见的问题
+            - README 新增开发时间线，同步展示功能演进与缺陷修复
+            - 新增“检查更新”: 后台联网查询 GitHub 最新 Release, 有新版本时展示
+              发布说明并提供下载页跳转; 启动后自动静默检查
+            - 工具栏右上角新增联系方式: 邮箱 maileyang@qq.com / 微信 maileyang
+            - TTPL/Vienna PFC 电感设计页（Magnetics High Flux Core Data 254、
+              直流偏置磁导率跌落与磁芯损耗拟合、满载 L(I) 曲线、漆包铜线热态 DCR/直流 I²R 铜损、
+              一键回写功率级参数）
+            - Vienna 工作区 UI 与 TTPL/LLC 对齐（紧凑工具栏/框图/隐藏参数交互）
+            - LLC 谐振腔、Q/ZVS、磁件、损耗、波形和数字控制设计
+            - 单相 TTPL PFC 与三相 Vienna PFC 控制、Bode、波形和 PF/THD 分析
+            - LLC、TTPL、Vienna 平台无关 C99/Float32 控制代码生成
 
             ## Windows 11
             1. 解压 `PowerDesignTool-Windows-x64.zip`
-            2. 双击 `PowerDesignTool.exe` 即可运行；或源码目录双击 `OPEN_GUI_WIN.bat`
+            2. 双击 `PowerDesignTool.exe` 即可运行
 
             ## macOS (Apple Silicon)
             1. 解压 `PowerDesignTool-macOS-arm64.zip`
             2. 若提示 "Apple 无法验证" / "已损坏":
                - 终端执行 `xattr -cr /Applications/PowerDesignTool.app`
                - 或右键点击 `PowerDesignTool.app` 选 "打开" → 再点 "打开"
-            3. 双击 `PowerDesignTool.app` 启动；或源码目录双击 `OPEN_GUI_MACOS.command`
+            3. 双击 `PowerDesignTool.app` 启动
 
-            ## 源码
-            - 发布页同时附带源码 ZIP：`PowerDesignTool-src-<tag>.zip`（含 wheel）
-
-  source-zip:
-    needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Build wheel
-        run: python -m pip wheel --no-deps --wheel-dir artifacts .
-
-      - name: Package source ZIP
-        env:
-          SRC_PKG: PowerDesignTool-src-${{ github.ref_name }}
-        run: |
-          set -eu
-          git archive --format=zip --prefix="$SRC_PKG/" -o "$SRC_PKG.zip" HEAD
-          WHEEL=$(ls artifacts/*.whl | head -1)
-          python - "$SRC_PKG.zip" "$SRC_PKG" "$WHEEL" <<'PY'
-          import sys, zipfile
-          out, pkg, wheel = sys.argv[1:4]
-          with zipfile.ZipFile(out, "a") as z:
-              z.write(wheel, pkg + "/artifacts/" + wheel.split("/")[-1])
-          print("appended", wheel)
-          PY
-
-      - name: Upload source ZIP to Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: PowerDesignTool-src-${{ github.ref_name }}.zip
+            ## 使用
+            - 启动后先选择 LLC 或 PFC 工作区，工具栏可随时切换
+            - 单相 PFC CLI：`pfc-control-lab --output output/ttpl`
+            - Vienna CLI：`vienna-control-lab --output output/vienna`
+            - C99 代码生成：`python -m power_codegen --help`

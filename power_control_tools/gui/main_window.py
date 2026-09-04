@@ -93,22 +93,21 @@ _CONTROLLER_LABELS = {
 
 class ControlToolsMainWindow(QMainWindow):
     workspace_switch_requested = Signal(str)
+    digital_design_updated = Signal(object, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("电源设计工具箱 — Digital Control Tools")
         self.resize(1800, 1050)
         self.current_analog = None; self.current_digital = None; self.current_analysis = None
-        # QTabWidget.addTab() fires currentChanged -> _changed() -> schedule() during
-        # construction, so the timer must exist before the parameter widgets are built.
-        self.timer = QTimer(self); self.timer.setSingleShot(True); self.timer.setInterval(45)
-        self.timer.timeout.connect(self.recalculate)
         root = QWidget(); row = QHBoxLayout(root)
         self.param_widget = self._build_parameters(); self.tabs = self._build_tabs()
         scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         scroll.setWidget(self.param_widget); scroll.setMinimumWidth(500); scroll.setMaximumWidth(650)
         row.addWidget(scroll, 0); row.addWidget(self.tabs, 1); self.setCentralWidget(root)
         self._build_toolbar(); self.setStyleSheet(theme.workspace_stylesheet(theme.active_theme()))
+        self.timer = QTimer(self); self.timer.setSingleShot(True); self.timer.setInterval(45)
+        self.timer.timeout.connect(self.recalculate)
         self._update_dynamic_visibility(); self.recalculate()
 
     def _build_toolbar(self):
@@ -251,21 +250,20 @@ class ControlToolsMainWindow(QMainWindow):
         elif kind == ControllerKind.GENERAL: visible |= {self.general_num, self.general_den}
         for widget in self.ctrl_fields: self._field_visible(self.ctrl_form, widget, widget in visible)
 
-        if hasattr(self, "filter_form"):
-            impl = self.filter_impl.currentText(); response = self.response.currentData()
-            fv = {self.filter_impl}
-            if impl == "IIR":
-                fv |= {self.response, self.family, self.order, self.fc}
-                if response in (FilterResponse.BANDPASS, FilterResponse.BANDSTOP): fv.add(self.fc2)
-                if response == FilterResponse.NOTCH: fv.add(self.q)
-                if self.family.currentData() in (IIRFamily.CHEBYSHEV1, IIRFamily.ELLIPTIC): fv.add(self.rp)
-                if self.family.currentData() in (IIRFamily.CHEBYSHEV2, IIRFamily.ELLIPTIC): fv.add(self.rs)
-            elif impl == "FIR Window":
-                fv |= {self.response, self.fir_taps, self.fir_window, self.fc}
-                if response in (FilterResponse.BANDPASS, FilterResponse.BANDSTOP, FilterResponse.NOTCH): fv.add(self.fc2)
-            elif impl == "Moving Average": fv |= {self.fir_taps}
-            else: fv |= {self.dc_radius}
-            for widget in self.filter_fields: self._field_visible(self.filter_form, widget, widget in fv)
+        impl = self.filter_impl.currentText(); response = self.response.currentData()
+        fv = {self.filter_impl}
+        if impl == "IIR":
+            fv |= {self.response, self.family, self.order, self.fc}
+            if response in (FilterResponse.BANDPASS, FilterResponse.BANDSTOP): fv.add(self.fc2)
+            if response == FilterResponse.NOTCH: fv.add(self.q)
+            if self.family.currentData() in (IIRFamily.CHEBYSHEV1, IIRFamily.ELLIPTIC): fv.add(self.rp)
+            if self.family.currentData() in (IIRFamily.CHEBYSHEV2, IIRFamily.ELLIPTIC): fv.add(self.rs)
+        elif impl == "FIR Window":
+            fv |= {self.response, self.fir_taps, self.fir_window, self.fc}
+            if response in (FilterResponse.BANDPASS, FilterResponse.BANDSTOP, FilterResponse.NOTCH): fv.add(self.fc2)
+        elif impl == "Moving Average": fv |= {self.fir_taps}
+        else: fv |= {self.dc_radius}
+        for widget in self.filter_fields: self._field_visible(self.filter_form, widget, widget in fv)
         self._field_visible(self.sampling_form, self.prewarp, self.method.currentData() == DiscretizationMethod.PREWARP_TUSTIN)
 
     def _figure_tab(self):
@@ -357,6 +355,9 @@ class ControlToolsMainWindow(QMainWindow):
             self._update_dynamic_visibility(); a, d = self._design(); self._update_live_transfer(a, d)
             r = analyze_digital_filter(d, analog=a, response_samples=400)
             self.current_analog = a; self.current_digital = d; self.current_analysis = r; self._render()
+            if self.design_pages.currentIndex() == 0:
+                label = _CONTROLLER_LABELS.get(self.ctrl.currentData(), str(self.ctrl.currentText()))
+                self.digital_design_updated.emit(d, label)
             warn = []
             if d.max_pole_radius > 0.995: warn.append("Pole very close to unit circle: float32_t / transient robustness requires review.")
             critical = self.lpf_pole.value() if self.design_pages.currentIndex() == 0 and self.ctrl.currentData() in (ControllerKind.PIF, ControllerKind.PIDF) else self.fc.value()

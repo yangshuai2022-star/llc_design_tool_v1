@@ -1,0 +1,57 @@
+Power Design Toolkit V9.1.0 — Formal Digital Control Baseline
+=============================================================
+
+Validation date: 2026-09-04
+
+Scope
+-----
+- Gecko/Java experimental backend removed from formal baseline.
+- Control Tools exact H(z) linked into LLC digital closed-loop analysis.
+- Sampler/ADC, FM/TBPRD modulator, PWM/ZOH delay, PM/GM, S/T and discrete closed-loop poles retained.
+- Control Tools single-file float32_t DF2T/SOS C99 generator retained.
+
+Direct linkage regression
+-------------------------
+PASS: Control Tools PIF -> Tustin H(z) -> LLC small-signal loop
+- exact sample rate preserved
+- exact numerator b[] preserved
+- exact denominator a[] preserved
+- complete open-loop response finite
+- discrete closed-loop poles computed
+- explicit Control Tools source metadata/warning present
+
+Test collection
+---------------
+288 tests collected.
+
+Grouped regression execution
+-----------------------------
+LLC tests group A: PASS
+LLC tests group B: PASS
+PFC tests: PASS
+Control Tools + generic digital runtime + Codegen + Web + Backend: PASS
+Backend expected xfail: 2
+Observed failures: 0
+
+Expected xfail details
+----------------------
+1. backend/test_control_api.py::test_compensator_design_meets_bandwidth_and_phase_margin
+2. backend/test_control_api.py::test_loop_gain_api_reports_margins
+Both are documented single-2P2Z phase-boost limitations, not V9 regressions.
+
+Additional checks
+-----------------
+python -m compileall: PASS
+git diff --check: PASS
+python -m llc_design closed-loop-selftest: PASS
+  Linear stable=True
+  Pole radius=0.99663206
+  PM=113.9294 deg
+  GM=32.2616 dB
+  Fc=38.6608 Hz
+  Event runtime converged=True
+
+GUI runtime
+-----------
+PySide6 is not installed in the build container. GUI Python sources compile successfully,
+but an actual Qt window launch was not performed in this environment.

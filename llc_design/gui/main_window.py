@@ -91,6 +91,8 @@ class LLCMainWindow(QMainWindow):
         self.system_analysis: SystemAnalysis | None = None
         self.small_signal_analysis: SmallSignalAnalysis | None = None
         self.digital_loop_analysis: DigitalLoopAnalysis | None = None
+        self.external_control_design = None
+        self.external_control_label = ""
         self.q_zvs_analysis: LLCQZVSAnalysis | None = None
         self.transformer_synthesis: TransformerSynthesisResult | None = None
         self.multi_fidelity_analysis: MultiFidelityAnalysis | None = None
@@ -277,7 +279,7 @@ class LLCMainWindow(QMainWindow):
         elif current is self.small_signal_view:
             self.run_small_signal({})
         elif current is self.digital_loop_view:
-            self.run_digital_loop({})
+            self.digital_loop_view.request_analysis()
         else:
             self.run_design()
 
@@ -927,6 +929,22 @@ class LLCMainWindow(QMainWindow):
         self.interleaved_view.set_result(result)
         self.tabs.setCurrentWidget(self.interleaved_view)
         self._append_log(f"Interleaved ready: N={result.phase_count}, offsets={result.phase_offsets_deg}, CoutIrms={result.output_capacitor_rms_a:.3f} A")
+
+
+    def set_external_control_design(self, digital, label: str = "") -> None:
+        """Receive the canonical H(z) designed in Control Tools.
+
+        V9 uses this exact discrete transfer function in the LLC small-signal
+        closed-loop analysis.  No PI/PID parameter re-fit is performed.
+        """
+        self.external_control_design = digital
+        self.external_control_label = label or getattr(digital, "name", "Control Tools")
+        if hasattr(self, "digital_loop_view"):
+            self.digital_loop_view.set_external_controller(digital, self.external_control_label)
+        self._append_log(
+            f"Control Tools -> LLC small-signal loop: {self.external_control_label}, "
+            f"Fs={digital.sample_rate_hz/1e3:.3f} kHz"
+        )
 
     def run_harmonic_waveforms(self, options: dict | None = None) -> None:
         try:

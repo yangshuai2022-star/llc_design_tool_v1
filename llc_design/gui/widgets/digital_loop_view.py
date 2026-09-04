@@ -64,6 +64,8 @@ from .control_block_diagram import BlockSpec, ConnectionSpec, ControlBlockDiagra
 from .sense_schematic import AnalogSenseSchematic
 from .. import theme
 from power_codegen import generate_llc_control_code
+from power_control_tools.codegen import export_c99_filter, verify_c99_filter
+from power_control_tools.models import DigitalTransferFunction as ToolDigitalTransferFunction
 
 
 class DigitalLoopView(QWidget):
@@ -114,6 +116,18 @@ class DigitalLoopView(QWidget):
         self.inspector_toggle.setToolTip("隐藏/显示数字环路的局部参数检查器")
         diagram_header.addWidget(self.inspector_toggle)
         root.addLayout(diagram_header)
+
+        external_row = QHBoxLayout()
+        self.external_controller_check = QCheckBox("使用 Control Tools 当前 H(z)")
+        self.external_controller_check.setEnabled(False)
+        self.external_controller_status = QLabel("Control Tools：未接收控制器")
+        self.external_controller_status.setWordWrap(True)
+        self.external_controller_status.setStyleSheet(f"color:{theme.active_theme().text_muted};")
+        external_row.addWidget(self.external_controller_check)
+        external_row.addWidget(self.external_controller_status, 1)
+        root.addLayout(external_row)
+        self._external_controller = None
+        self._external_controller_label = ""
 
         self._diagram_blocks = [
             BlockSpec("sum", "Σ", "Vref − Vfb", 15, 20, 82, 62),
@@ -697,6 +711,19 @@ class DigitalLoopView(QWidget):
         for widget in (self.b0, self.b1, self.b2, self.a1, self.a2):
             widget.setEnabled(kind == ControllerKind.TWO_P_TWO_Z)
 
+    def set_external_controller(self, digital, label: str = "") -> None:
+        """Link the exact H(z) currently designed in Control Tools."""
+        self._external_controller = digital
+        self._external_controller_label = label or getattr(digital, "name", "Control Tools")
+        self.external_controller_check.setEnabled(True)
+        self.external_controller_check.setChecked(True)
+        fs = float(getattr(digital, "sample_rate_hz"))
+        self.sample_us.setValue(1.0e6 / fs)
+        self.external_controller_status.setText(
+            f"已联动：{self._external_controller_label} | Fs={fs/1e3:.3f} kHz | "
+            f"H(z) 系数直接用于 LLC 小信号闭环"
+        )
+
     def set_nominal_work_point(self, vbus_v: float) -> None:
         self.vbus.setValue(vbus_v)
 
@@ -733,6 +760,23 @@ class DigitalLoopView(QWidget):
         if not directory:
             return
         try:
+            if self.result.controller_config is None:
+                tf = ToolDigitalTransferFunction(
+                    tuple(float(v) for v in self.result.controller.numerator),
+                    tuple(float(v) for v in self.result.controller.denominator),
+                    1.0 / self.result.controller.sample_time_s,
+                    name=self.result.controller.name,
+                    source=self.result.controller_source,
+                )
+                exported = export_c99_filter(tf, Path(directory), prefix="LLC_VLOOP")
+                verification = verify_c99_filter(tf, exported)
+                detail = (
+                    f"已生成单文件：{exported.file_path}\n"
+                    f"C99 float32_t / DF2T-SOS 验证："
+                    f"{'PASS' if verification.passed else verification.message}"
+                )
+                QMessageBox.information(self, "C99 代码生成完成", detail)
+                return
             result = generate_llc_control_code(self.result, Path(directory) / "llc_control_generated")
         except Exception as exc:
             QMessageBox.warning(self, "C99 代码生成失败", str(exc))
@@ -741,6 +785,10 @@ class DigitalLoopView(QWidget):
             self, "C99 代码生成完成",
             f"已生成：{result.directory}\n\n输出 PCMD / Fsw / TBPRD 等语义控制量，不生成 ePWM/ADC BSP。",
         )
+
+    def request_analysis(self) -> None:
+        """Public wrapper used by the global Run Current action."""
+        self._request()
 
     def _request(self) -> None:
         try:
@@ -751,7 +799,17 @@ class DigitalLoopView(QWidget):
                 timer_clock_hz=self.timer_mhz.value() * 1e6,
                 count_mode=self.count_mode.currentData(),
             )
-            controller = self._controller_config(sample_time_s)
+            use_external = bool(
+                self.external_controller_check.isChecked()
+                and self._external_controller is not None
+            )
+            if use_external:
+                external_fs = float(getattr(self._external_controller, "sample_rate_hz"))
+                sample_time_s = 1.0 / external_fs
+                self.sample_us.setValue(sample_time_s * 1e6)
+                controller = None
+            else:
+                controller = self._controller_config(sample_time_s)
             analog = AnalogSenseConfig(
                 rup_ohm=self.rup_k.value() * 1e3,
                 rlow_ohm=self.rlow_k.value() * 1e3,
@@ -785,6 +843,8 @@ class DigitalLoopView(QWidget):
                 },
                 "loop": {
                     "controller_config": controller,
+                    "controller_transfer_function": self._external_controller if use_external else None,
+                    "controller_source": self._external_controller_label if use_external else "LLC local controller",
                     "fm_lut": lut,
                     "command_pu": None if self.auto_pcmd.isChecked() else self.pcmd.value(),
                     "analog_sense": analog,
@@ -797,6 +857,9 @@ class DigitalLoopView(QWidget):
 
     def set_analysis(self, result: DigitalLoopAnalysis) -> None:
         self.result = result
+        self.external_controller_status.setText(
+            f"闭环控制器来源：{result.controller_source} | C(z)={result.controller.name}"
+        )
         self.pcmd.setValue(result.fm_operating_point.command_pu)
         self._cursor_frequency_hz = result.margins_nominal_delay.critical_gain_crossover_hz
         self.refresh()

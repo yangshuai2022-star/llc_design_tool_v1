@@ -880,8 +880,9 @@ def _continuous_to_discrete_tf(
 @dataclass(frozen=True)
 class DigitalLoopAnalysis:
     small_signal: SmallSignalAnalysis
-    controller_config: ControllerConfig
+    controller_config: ControllerConfig | None
     controller: DigitalTransferFunction
+    controller_source: str
     fm_lut: FrequencyModulatorLUT
     fm_operating_point: FMOperatingPoint
     analog_sense: AnalogSenseConfig
@@ -915,7 +916,9 @@ class DigitalLoopAnalysis:
 def build_digital_loop_analysis(
     small_signal: SmallSignalAnalysis,
     *,
-    controller_config: ControllerConfig,
+    controller_config: ControllerConfig | None = None,
+    controller_transfer_function: object | None = None,
+    controller_source: str | None = None,
     fm_lut: FrequencyModulatorLUT | None = None,
     command_pu: float | None = None,
     analog_sense: AnalogSenseConfig | None = None,
@@ -923,8 +926,33 @@ def build_digital_loop_analysis(
     command_timing: CommandTimingConfig | None = None,
     frequencies_hz: Sequence[float] | FloatArray | None = None,
 ) -> DigitalLoopAnalysis:
-    """Connect the complete digital voltage-loop signal chain."""
-    controller = controller_config.transfer_function()
+    """Connect the complete digital voltage-loop signal chain.
+
+    ``controller_transfer_function`` is the canonical V9 bridge from Control
+    Tools into the LLC loop model.  It accepts either this module's native
+    :class:`DigitalTransferFunction` or the public Control Tools transfer
+    object (``b``, ``a``, ``sample_rate_hz``).  When supplied, the exact H(z)
+    designed in Control Tools is used without re-fitting PI/PID parameters.
+    """
+    if controller_transfer_function is not None:
+        ext = controller_transfer_function
+        if isinstance(ext, DigitalTransferFunction):
+            controller = ext
+        elif all(hasattr(ext, name) for name in ("b", "a", "sample_rate_hz")):
+            controller = DigitalTransferFunction(
+                np.asarray(getattr(ext, "b"), dtype=float),
+                np.asarray(getattr(ext, "a"), dtype=float),
+                1.0 / float(getattr(ext, "sample_rate_hz")),
+                name=str(getattr(ext, "name", "Control Tools H(z)")),
+            )
+        else:
+            raise TypeError("controller_transfer_function must provide b/a/sample_rate_hz")
+        source = controller_source or str(getattr(ext, "source", "Control Tools")) or "Control Tools"
+    elif controller_config is not None:
+        controller = controller_config.transfer_function()
+        source = controller_source or "LLC local controller"
+    else:
+        raise ValueError("either controller_config or controller_transfer_function is required")
     sample_time = controller.sample_time_s
     if not math.isclose(sample_time, small_signal.sample_time_s, rel_tol=0.0, abs_tol=1e-15):
         raise ValueError("controller and LLC ZOH plant sample times must match")
@@ -1044,9 +1072,13 @@ def build_digital_loop_analysis(
         warnings.append(
             "The selected/custom FM LUT does not reproduce the plant operating frequency within 1%; PCMD linearization and plant work point are inconsistent."
         )
-    if controller_kind(controller_config) in {ControllerKind.PI, ControllerKind.PIF}:
+    if controller_config is not None and controller_kind(controller_config) in {ControllerKind.PI, ControllerKind.PIF}:
         if getattr(controller_config, "output_min", 0.0) != 0.0 or getattr(controller_config, "output_max", 1.0) != 1.0:
             warnings.append("Controller output limits differ from the requested normalized PCMD range 0..1.")
+    if controller_transfer_function is not None:
+        warnings.append(
+            "Controller H(z) is linked directly from Control Tools; its output is interpreted as the small-signal PCMD/modulator command."
+        )
     warnings.append(
         "Linear Bode validity requires voltage-loop ownership: no current-limit min-selector takeover, burst, soft-start, saturation, OVP/UVP/OPP or hardware trip."
     )
@@ -1055,6 +1087,7 @@ def build_digital_loop_analysis(
         small_signal=small_signal,
         controller_config=controller_config,
         controller=controller,
+        controller_source=source,
         fm_lut=lut,
         fm_operating_point=fm,
         analog_sense=analog,
@@ -1158,14 +1191,15 @@ def export_digital_loop_analysis(result: DigitalLoopAnalysis, directory: str | P
     controller_path = export_controller_c99(
         result.controller,
         output / "llc_voltage_controller.c",
-        output_min=getattr(result.controller_config, "output_min", 0.0),
-        output_max=getattr(result.controller_config, "output_max", 1.0),
+        output_min=getattr(result.controller_config, "output_min", 0.0) if result.controller_config is not None else 0.0,
+        output_max=getattr(result.controller_config, "output_max", 1.0) if result.controller_config is not None else 1.0,
     )
 
     settings_path = output / "digital_loop_settings.json"
     payload = {
-        "controller_kind": controller_kind(result.controller_config).value,
-        "controller_config": asdict(result.controller_config),
+        "controller_source": result.controller_source,
+        "controller_kind": controller_kind(result.controller_config).value if result.controller_config is not None else "external_hz",
+        "controller_config": asdict(result.controller_config) if result.controller_config is not None else None,
         "controller_numerator_z_minus": result.controller.numerator.tolist(),
         "controller_denominator_z_minus": result.controller.denominator.tolist(),
         "controller_difference_equation": result.controller.difference_equation(),

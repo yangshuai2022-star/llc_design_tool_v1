@@ -5,10 +5,8 @@ __pycache__/
 .pytest_cache/
 .mplcache/
 **/.mplcache/
-# Build artifacts
 build/
 dist/
-artifacts/*.whl
 .venv/
 .worktrees/
 

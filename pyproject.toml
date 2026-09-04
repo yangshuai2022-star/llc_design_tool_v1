@@ -1,8 +1,8 @@
 [project]
 name = "power-design-toolkit"
-version = "8.3.0a2"
-description = "Integrated LLC, single-phase TTPL PFC and three-phase Vienna PFC engineering design laboratory"
-license = {text = "MIT"}
+version = "9.1.0"
+description = "Integrated power-electronics design toolkit with LLC/PFC engineering, digital control tools and closed-loop stability analysis"
+license = {text = "GPL-3.0-only"}
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24",
@@ -36,7 +36,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["pfc_design*", "llc_design*", "power_codegen*", "power_control_tools*", "webapp*", "backend*"]
+include = ["pfc_design*", "llc_design*", "power_codegen*", "power_control_tools*", "power_sim*", "webapp*", "backend*"]
 exclude = ["*.output*", "*.__pycache__*"]
 
 [tool.setuptools.package-data]
@@ -45,5 +45,5 @@ exclude = ["*.output*", "*.__pycache__*"]
 "webapp" = ["static/*"]
 
 [tool.pytest.ini_options]
-testpaths = ["pfc_design/tests", "llc_design/tests", "power_codegen/tests", "power_control_tools/tests", "webapp/tests", "backend/tests"]
+testpaths = ["pfc_design/tests", "llc_design/tests", "power_codegen/tests", "power_control_tools/tests", "power_sim/tests", "webapp/tests", "backend/tests"]
 addopts = "-q"

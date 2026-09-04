@@ -102,6 +102,7 @@ class WorkspaceApplicationController:
         self.llc_window.workspace_switch_requested.connect(self._handle_request)
         self.pfc_window.workspace_switch_requested.connect(self._handle_request)
         self.control_window.workspace_switch_requested.connect(self._handle_request)
+        self.control_window.digital_design_updated.connect(self.llc_window.set_external_control_design)
 
     def start(self) -> bool:
         dialog = WorkspaceSelectionDialog()
