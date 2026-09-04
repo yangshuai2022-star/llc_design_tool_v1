@@ -15,7 +15,7 @@ from typing import Any
 
 import numpy as np
 
-from llc_design.core.spec import LLCDesignSpec, PrimaryTopology
+from llc_design.core.spec import LLCDesignSpec, PrimaryTopology, TankParameterMode
 from llc_design.core.tank import equivalent_ac_load_ohm, gain_vector, target_gain
 from llc_design.models.devices import DeviceDatabase
 from llc_design.models.system import LLCSystemAnalyzer, SystemAnalysis
@@ -39,6 +39,9 @@ _NUMERIC_LIMITS: dict[str, tuple[float, float]] = {
     "maximum_frequency_hz": (2_000.0, 3_000_000.0),
     "ln_ratio": (1.01, 50.0),
     "q_full_load": (0.01, 5.0),
+    "user_lr_h": (1e-9, 1.0),
+    "user_cr_f": (1e-12, 0.1),
+    "user_lm_h": (1e-9, 10.0),
     "primary_turns": (1.0, 500.0),
     "secondary_turns": (1.0, 500.0),
     "rectifier_equivalent_drop_v": (0.0, 20.0),
@@ -57,7 +60,7 @@ _NUMERIC_LIMITS: dict[str, tuple[float, float]] = {
 }
 
 _STRING_FIELDS = {"primary_device", "sr_device"}
-_ENUM_FIELDS = {"primary_topology"}
+_ENUM_FIELDS = {"primary_topology", "parameter_mode"}
 _ALLOWED_FIELDS = set(_NUMERIC_LIMITS) | _STRING_FIELDS | _ENUM_FIELDS
 _INTEGER_FIELDS = {"primary_turns", "secondary_turns", "primary_parallel_devices", "sr_parallel_devices_per_position"}
 
@@ -83,6 +86,7 @@ def default_payload() -> dict[str, Any]:
     return {
         "spec": fields,
         "topologies": [item.value for item in PrimaryTopology],
+        "parameter_modes": [item.value for item in TankParameterMode],
         "primary_devices": [item.part_number for item in db.primary],
         "sr_devices": [item.part_number for item in db.sr],
     }
@@ -114,6 +118,8 @@ def spec_from_payload(payload: dict[str, Any]) -> LLCDesignSpec:
             changes[name] = value
         elif name == "primary_topology":
             changes[name] = PrimaryTopology(str(raw))
+        elif name == "parameter_mode":
+            changes[name] = TankParameterMode(str(raw))
         elif name in _STRING_FIELDS:
             changes[name] = str(raw)
 

@@ -9,7 +9,7 @@ from typing import Iterable
 import numpy as np
 from scipy.optimize import brentq
 
-from .spec import LLCDesignSpec
+from .spec import LLCDesignSpec, TankParameterMode
 
 
 SQRT2 = math.sqrt(2.0)
@@ -73,9 +73,25 @@ def equivalent_ac_load_ohm(turns_ratio: float, vout_v: float, pout_w: float) -> 
 
 
 def design_tank(spec: LLCDesignSpec) -> TankDesign:
-    """Synthesize Lr/Cr/Lm from fr, full-load Q and Ln."""
+    """Build the tank from either the automatic design or user values.
+
+    USER_DEFINED is a verification path: Lr/Cr/Lm are accepted verbatim and
+    fr/Ln/Q are derived from them. No optimizer or hidden re-synthesis is run.
+    """
     spec.validate()
     rac = equivalent_ac_load_ohm(spec.turns_ratio, spec.vout_v, spec.pout_w)
+    if TankParameterMode(spec.parameter_mode) == TankParameterMode.USER_DEFINED:
+        assert spec.user_lr_h is not None and spec.user_cr_f is not None and spec.user_lm_h is not None
+        lr = float(spec.user_lr_h)
+        cr = float(spec.user_cr_f)
+        lm = float(spec.user_lm_h)
+        zr = math.sqrt(lr / cr)
+        fr = 1.0 / (2.0 * math.pi * math.sqrt(lr * cr))
+        ln = lm / lr
+        q = zr / rac
+        return TankDesign(lr_h=lr, cr_f=cr, lm_h=lm, rac_nom_ohm=rac,
+                          zr_ohm=zr, ln_ratio=ln, q_full_load=q, fr_hz=fr)
+
     zr = spec.q_full_load * rac
     omega_r = 2.0 * math.pi * spec.resonant_frequency_hz
     lr = zr / omega_r

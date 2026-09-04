@@ -39,6 +39,7 @@ class PFCMainWindow(QMainWindow):
     def _build_toolbar(self):
         tb=self.addToolBar("PFC 工作区");tb.setMovable(False)
         a=QAction("切换到 LLC",self);a.triggered.connect(lambda:self.workspace_switch_requested.emit("llc"));tb.addAction(a)
+        a=QAction("Control Tools",self);a.triggered.connect(lambda:self.workspace_switch_requested.emit("control"));tb.addAction(a)
         a=QAction("功能选择",self);a.triggered.connect(lambda:self.workspace_switch_requested.emit("home"));tb.addAction(a);tb.addSeparator()
         a=QAction("TTPL",self);a.triggered.connect(lambda:self.subtabs.setCurrentIndex(0));tb.addAction(a)
         a=QAction("Vienna",self);a.triggered.connect(lambda:self.subtabs.setCurrentIndex(1));tb.addAction(a)

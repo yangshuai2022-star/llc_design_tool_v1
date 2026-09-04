@@ -18,7 +18,7 @@ from .analysis import (
     solve_harmonic_balance,
 )
 from .core.config import load_spec, save_spec
-from .core.spec import LLCDesignSpec, PrimaryTopology
+from .core.spec import LLCDesignSpec, PrimaryTopology, TankParameterMode
 from .core.tank import GainNotReachableError
 from .models.devices import DeviceDatabase
 from .models.system import LLCSystemAnalyzer
@@ -115,6 +115,10 @@ def transformer_design(config, preset, bmax, strand_mm, strand_step, current_den
 @click.option("--fmax-khz", type=float, default=None, help="Maximum frequency (kHz)")
 @click.option("--ln", type=float, default=None, help="Lm/Lr ratio")
 @click.option("--q", "q_full", type=float, default=None, help="Full-load FHA Q")
+@click.option("--parameter-mode", type=click.Choice(["auto", "user"]), default=None, help="Tank source: auto synthesis or user-defined validation")
+@click.option("--lr-uh", type=float, default=None, help="User-defined resonant inductance Lr (uH)")
+@click.option("--cr-nf", type=float, default=None, help="User-defined resonant capacitance Cr (nF)")
+@click.option("--lm-uh", type=float, default=None, help="User-defined magnetizing inductance Lm (uH)")
 @click.option("--np", "primary_turns", type=int, default=None, help="Primary turns")
 @click.option("--ns", "secondary_turns", type=int, default=None, help="Secondary turns")
 @click.option("--bus-cap-uf", type=float, default=None, help="Installed bus capacitance (uF)")
@@ -132,7 +136,7 @@ def transformer_design(config, preset, bmax, strand_mm, strand_step, current_den
               show_default=True, help="Calculation-book output directory")
 @click.option("--plots/--no-plots", default=True, help="Generate PNG plots")
 def run(config, vbus, vout, pout, fr_khz, fmin_khz, fmax_khz, ln, q_full,
-        primary_turns, secondary_turns, bus_cap_uf, hold_ms, device, sr_device,
+        parameter_mode, lr_uh, cr_nf, lm_uh, primary_turns, secondary_turns, bus_cap_uf, hold_ms, device, sr_device,
         primary_parallel, sr_parallel,
         half_bridge, transformer_core, inductor_core, transformer_family, inductor_family, output, plots):
     """Run one complete LLC calculation and export the calculation book."""
@@ -149,6 +153,10 @@ def run(config, vbus, vout, pout, fr_khz, fmin_khz, fmax_khz, ln, q_full,
         maximum_frequency_hz=None if fmax_khz is None else fmax_khz * 1e3,
         ln_ratio=ln,
         q_full_load=q_full,
+        parameter_mode=(TankParameterMode.USER_DEFINED if parameter_mode == "user" else TankParameterMode.AUTO_DESIGN if parameter_mode == "auto" else None),
+        user_lr_h=None if lr_uh is None else lr_uh * 1e-6,
+        user_cr_f=None if cr_nf is None else cr_nf * 1e-9,
+        user_lm_h=None if lm_uh is None else lm_uh * 1e-6,
         primary_turns=primary_turns,
         secondary_turns=secondary_turns,
         bus_capacitance_f=None if bus_cap_uf is None else bus_cap_uf * 1e-6,
@@ -181,7 +189,7 @@ def run(config, vbus, vout, pout, fr_khz, fmin_khz, fmax_khz, ln, q_full,
     click.echo("\nLLC V2 calculation")
     click.echo(f"  Topology: {spec.primary_topology.value} + {spec.secondary_topology.value}")
     click.echo(f"  Input/output: {spec.vbus_nom_v:.0f} Vdc -> {spec.vout_v:.1f} V / {spec.pout_w/1000:.2f} kW")
-    click.echo(f"  Tank: Lr={analysis.tank.lr_h*1e6:.3f} uH, Cr={analysis.tank.cr_f*1e9:.3f} nF, Lm={analysis.tank.lm_h*1e6:.3f} uH")
+    click.echo(f"  Tank source: {spec.parameter_mode.value}; Lr={analysis.tank.lr_h*1e6:.3f} uH, Cr={analysis.tank.cr_f*1e9:.3f} nF, Lm={analysis.tank.lm_h*1e6:.3f} uH, fr={analysis.tank.fr_hz/1e3:.3f} kHz, Ln={analysis.tank.ln_ratio:.4f}, Q={analysis.tank.q_full_load:.4f}")
     click.echo(f"  Transformer: {analysis.transformer.core.part_number}, {spec.primary_turns}:{spec.secondary_turns}, fill={analysis.transformer.fill_factor*100:.1f}%")
     click.echo(f"  Resonant inductor: {analysis.resonant_inductor.core.part_number}, {analysis.resonant_inductor.turns} T, {analysis.resonant_inductor.layers} layers")
     click.echo(f"  Nominal: fs={nominal.operating_point.switching_frequency_hz/1e3:.2f} kHz, loss={nominal.total_loss_w:.2f} W, eta={nominal.efficiency*100:.3f}%")

@@ -19,6 +19,17 @@ class SecondaryTopology(str, Enum):
     FULL_BRIDGE_SR = "FULL_BRIDGE_SR"
 
 
+class TankParameterMode(str, Enum):
+    """Source of the resonant-tank parameters.
+
+    AUTO_DESIGN keeps the legacy fr/Ln/Q synthesis path. USER_DEFINED uses
+    the user supplied Lr/Cr/Lm verbatim and derives fr/Ln/Q for validation.
+    """
+
+    AUTO_DESIGN = "AUTO_DESIGN"
+    USER_DEFINED = "USER_DEFINED"
+
+
 @dataclass(frozen=True)
 class MosfetSpec:
     """Simplified MOSFET record used by the V1 loss model.
@@ -80,6 +91,7 @@ class LLCDesignSpec:
     secondary_topology: SecondaryTopology = SecondaryTopology.FULL_BRIDGE_SR
 
     # Resonant tank
+    parameter_mode: TankParameterMode = TankParameterMode.AUTO_DESIGN
     resonant_frequency_hz: float = 100_000.0
     minimum_frequency_hz: float = 60_000.0
     maximum_frequency_hz: float = 180_000.0
@@ -87,6 +99,11 @@ class LLCDesignSpec:
     q_full_load: float = 0.35             # sqrt(Lr/Cr)/Rac at rated load
     primary_turns: int = 30
     secondary_turns: int = 4
+    # User-defined verification values. They are consumed only when
+    # parameter_mode == USER_DEFINED and are never silently optimized.
+    user_lr_h: float | None = None
+    user_cr_f: float | None = None
+    user_lm_h: float | None = None
     rectifier_equivalent_drop_v: float = 0.40
 
     # Hold-up and capacitors
@@ -209,12 +226,23 @@ class LLCDesignSpec:
             errors.append("output voltage and power must be positive")
         if not (0 < self.minimum_frequency_hz < self.maximum_frequency_hz):
             errors.append("frequency range is invalid")
-        if not (self.minimum_frequency_hz <= self.resonant_frequency_hz <= self.maximum_frequency_hz):
-            errors.append("resonant frequency must lie inside the switching range")
-        if self.ln_ratio <= 1.0:
-            errors.append("Ln=Lm/Lr must exceed 1")
-        if self.q_full_load <= 0:
-            errors.append("full-load Q must be positive")
+        mode = TankParameterMode(self.parameter_mode)
+        if mode == TankParameterMode.AUTO_DESIGN:
+            if not (self.minimum_frequency_hz <= self.resonant_frequency_hz <= self.maximum_frequency_hz):
+                errors.append("resonant frequency must lie inside the switching range")
+            if self.ln_ratio <= 1.0:
+                errors.append("Ln=Lm/Lr must exceed 1")
+            if self.q_full_load <= 0:
+                errors.append("full-load Q must be positive")
+        else:
+            if self.user_lr_h is None or self.user_lr_h <= 0:
+                errors.append("USER_DEFINED requires positive user_lr_h")
+            if self.user_cr_f is None or self.user_cr_f <= 0:
+                errors.append("USER_DEFINED requires positive user_cr_f")
+            if self.user_lm_h is None or self.user_lm_h <= 0:
+                errors.append("USER_DEFINED requires positive user_lm_h")
+            if self.user_lr_h and self.user_lm_h and self.user_lm_h <= self.user_lr_h:
+                errors.append("USER_DEFINED requires Lm > Lr")
         if self.primary_turns <= 0 or self.secondary_turns <= 0:
             errors.append("transformer turns must be positive integers")
         if self.primary_parallel_devices < 1 or self.sr_parallel_devices_per_position < 1:

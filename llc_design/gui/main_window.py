@@ -52,8 +52,8 @@ from ..control.analysis import SmallSignalAnalysis, build_small_signal_analysis
 from ..control.digital_loop import DigitalLoopAnalysis, build_digital_loop_analysis
 from ..control.linearize import ControlInputKind
 from ..core.config import load_spec, save_spec
-from ..core.spec import LLCDesignSpec, PrimaryTopology
-from ..core.tank import equivalent_ac_load_ohm, gain, target_gain
+from ..core.spec import LLCDesignSpec, PrimaryTopology, TankParameterMode
+from ..core.tank import design_tank, equivalent_ac_load_ohm, gain, target_gain
 from ..core.q_zvs import LLCQZVSAnalysis, build_q_zvs_analysis
 from ..dynamics.plant import DynamicPhasorModel
 from ..dynamics.switched import SwitchedSimulationConfig, simulate_switched_steady_state
@@ -126,6 +126,10 @@ class LLCMainWindow(QMainWindow):
         switch_action.triggered.connect(
             lambda: self.workspace_switch_requested.emit("pfc"))
         toolbar.addAction(switch_action)
+        control_action = QAction("Control Tools", self)
+        control_action.triggered.connect(
+            lambda: self.workspace_switch_requested.emit("control"))
+        toolbar.addAction(control_action)
         home_action = QAction("功能选择", self)
         home_action.triggered.connect(
             lambda: self.workspace_switch_requested.emit("home"))
@@ -319,6 +323,11 @@ class LLCMainWindow(QMainWindow):
 
         tank = QGroupBox("谐振腔与变压器")
         form = QFormLayout(tank)
+        self.parameter_mode_combo = QComboBox()
+        self.parameter_mode_combo.addItem("Auto Design — fr / Ln / Q 综合", TankParameterMode.AUTO_DESIGN)
+        self.parameter_mode_combo.addItem("User Defined — Lr / Cr / Lm / Np:Ns 验证", TankParameterMode.USER_DEFINED)
+        self.parameter_mode_combo.currentIndexChanged.connect(self._parameter_mode_changed)
+        form.addRow("参数来源", self.parameter_mode_combo)
         tank_specs = [
             ("resonant_frequency_hz", "谐振频率", self._spin(1, 2000, 3, " kHz")),
             ("minimum_frequency_hz", "最低频率", self._spin(1, 2000, 3, " kHz")),
@@ -326,15 +335,37 @@ class LLCMainWindow(QMainWindow):
             ("ln_ratio", "Ln=Lm/Lr", self._spin(1.01, 30, 4)),
             ("q_full_load", "满载 Qe", self._spin(0.01, 5, 4)),
         ]
+        self.auto_tank_widgets = []
         for key, label, widget in tank_specs:
             self.fields[key] = widget
+            self.auto_tank_widgets.append(widget)
             form.addRow(label, widget)
+        self.user_lr = self._spin(0.001, 100000, 4, " µH")
+        self.user_cr = self._spin(0.001, 1000000, 4, " nF")
+        self.user_lm = self._spin(0.001, 1000000, 4, " µH")
+        self.fields["user_lr_h"] = self.user_lr
+        self.fields["user_cr_f"] = self.user_cr
+        self.fields["user_lm_h"] = self.user_lm
+        self.manual_tank_widgets = [self.user_lr, self.user_cr, self.user_lm]
+        form.addRow("用户 Lr", self.user_lr)
+        form.addRow("用户 Cr", self.user_cr)
+        form.addRow("用户 Lm", self.user_lm)
+        self.manual_derived_label = QLabel("User Defined: fr / Ln / Q 将由输入值实时派生")
+        self.manual_derived_label.setWordWrap(True)
+        form.addRow("派生参数", self.manual_derived_label)
+        self.copy_auto_button = QPushButton("复制 Auto Tank → User Defined")
+        self.copy_auto_button.clicked.connect(self._copy_auto_to_manual)
+        form.addRow(self.copy_auto_button)
+        for w in self.manual_tank_widgets:
+            w.valueChanged.connect(self._update_manual_derived_label)
         self.primary_turns = QSpinBox(); self.primary_turns.setRange(1, 500)
         self.secondary_turns = QSpinBox(); self.secondary_turns.setRange(1, 100)
         self.fields["primary_turns"] = self.primary_turns
         self.fields["secondary_turns"] = self.secondary_turns
         form.addRow("原边匝数", self.primary_turns)
         form.addRow("副边匝数", self.secondary_turns)
+        self.primary_turns.valueChanged.connect(self._update_manual_derived_label)
+        self.secondary_turns.valueChanged.connect(self._update_manual_derived_label)
         self.topology = QComboBox()
         self.topology.addItem("全桥 LLC", PrimaryTopology.FULL_BRIDGE)
         self.topology.addItem("半桥 LLC", PrimaryTopology.HALF_BRIDGE)
@@ -483,16 +514,61 @@ class LLCMainWindow(QMainWindow):
     def _append_log(self, message: str) -> None:
         self.log_text.appendPlainText(message.rstrip())
 
+    def _parameter_mode_changed(self) -> None:
+        if not hasattr(self, "parameter_mode_combo"):
+            return
+        manual = TankParameterMode(self.parameter_mode_combo.currentData()) == TankParameterMode.USER_DEFINED
+        for w in getattr(self, "auto_tank_widgets", []):
+            w.setEnabled(not manual)
+        for w in getattr(self, "manual_tank_widgets", []):
+            w.setEnabled(manual)
+        if hasattr(self, "copy_auto_button"):
+            self.copy_auto_button.setEnabled(not manual)
+        self._update_manual_derived_label()
+
+    def _copy_auto_to_manual(self) -> None:
+        try:
+            temp = self._spec_from_widgets().clone(parameter_mode=TankParameterMode.AUTO_DESIGN)
+            tank = design_tank(temp)
+            self.user_lr.setValue(tank.lr_h * 1e6)
+            self.user_cr.setValue(tank.cr_f * 1e9)
+            self.user_lm.setValue(tank.lm_h * 1e6)
+            idx = self.parameter_mode_combo.findData(TankParameterMode.USER_DEFINED)
+            if idx >= 0:
+                self.parameter_mode_combo.setCurrentIndex(idx)
+        except Exception as exc:
+            QMessageBox.warning(self, "无法复制参数", str(exc))
+
+    def _update_manual_derived_label(self) -> None:
+        if not hasattr(self, "manual_derived_label"):
+            return
+        lr = self.user_lr.value() * 1e-6 if hasattr(self, "user_lr") else 0.0
+        cr = self.user_cr.value() * 1e-9 if hasattr(self, "user_cr") else 0.0
+        lm = self.user_lm.value() * 1e-6 if hasattr(self, "user_lm") else 0.0
+        if lr > 0 and cr > 0 and lm > 0:
+            fr = 1.0 / (2.0 * np.pi * np.sqrt(lr * cr))
+            ln = lm / lr
+            n=(self.primary_turns.value()/max(self.secondary_turns.value(),1)) if hasattr(self,"primary_turns") else 0.0
+            self.manual_derived_label.setText(f"fr={fr/1e3:.3f} kHz   Ln={ln:.4f}   n=Np/Ns={n:.5f}   Q 按实际负载派生")
+        else:
+            self.manual_derived_label.setText("请输入正的 Lr / Cr / Lm")
+
     def _spec_from_widgets(self) -> LLCDesignSpec:
         changes = {}
         frequency_keys = {"resonant_frequency_hz", "minimum_frequency_hz", "maximum_frequency_hz"}
         microfarad_keys = {"bus_capacitance_f", "output_capacitance_f"}
+        microhenry_keys = {"user_lr_h", "user_lm_h"}
+        nanofarad_keys = {"user_cr_f"}
         for key, widget in self.fields.items():
             value = widget.value()
             if key in frequency_keys:
                 value *= 1e3
             elif key in microfarad_keys:
                 value *= 1e-6
+            elif key in microhenry_keys:
+                value *= 1e-6
+            elif key in nanofarad_keys:
+                value *= 1e-9
             elif key == "requested_hold_time_s":
                 value *= 1e-3
             elif key == "output_cap_esr_ohm":
@@ -503,6 +579,7 @@ class LLCMainWindow(QMainWindow):
                 value = int(value)
             changes[key] = value
         changes["primary_topology"] = PrimaryTopology(self.topology.currentData())
+        changes["parameter_mode"] = TankParameterMode(self.parameter_mode_combo.currentData())
         changes["primary_device"] = self.primary_device_combo.currentData()
         spec = self.spec.clone(**changes)
         spec.validate()
@@ -515,6 +592,15 @@ class LLCMainWindow(QMainWindow):
                 value /= 1e3
             elif key in {"bus_capacitance_f", "output_capacitance_f"}:
                 value *= 1e6
+            elif key in {"user_lr_h", "user_lm_h"}:
+                if value is None:
+                    auto_tank = design_tank(spec.clone(parameter_mode=TankParameterMode.AUTO_DESIGN))
+                    value = auto_tank.lr_h if key == "user_lr_h" else auto_tank.lm_h
+                value *= 1e6
+            elif key == "user_cr_f":
+                if value is None:
+                    value = design_tank(spec.clone(parameter_mode=TankParameterMode.AUTO_DESIGN)).cr_f
+                value *= 1e9
             elif key == "requested_hold_time_s":
                 value *= 1e3
             elif key == "output_cap_esr_ohm":
@@ -523,6 +609,10 @@ class LLCMainWindow(QMainWindow):
                 value *= 1e9
             widget.setValue(value)
         self.topology.setCurrentIndex(0 if PrimaryTopology(spec.primary_topology) == PrimaryTopology.FULL_BRIDGE else 1)
+        mode_idx = self.parameter_mode_combo.findData(TankParameterMode(spec.parameter_mode))
+        if mode_idx >= 0:
+            self.parameter_mode_combo.setCurrentIndex(mode_idx)
+        self._parameter_mode_changed()
         idx = self.primary_device_combo.findData(spec.primary_device)
         if idx >= 0:
             self.primary_device_combo.setCurrentIndex(idx)

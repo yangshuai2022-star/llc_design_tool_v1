@@ -61,9 +61,11 @@ function setValue(id, v) { $(id).value = Number.isFinite(v) ? v : ''; }
 function populate(d) {
   defaults = d; const s = d.spec;
   ['vbus_nom_v', 'vbus_min_normal_v', 'vbus_max_v', 'vbus_hold_end_v', 'vout_v', 'ln_ratio', 'q_full_load', 'primary_turns', 'secondary_turns'].forEach((k) => setValue(k, s[k]));
+  setValue('user_lr_uh', (s.user_lr_h || 0) * 1e6); setValue('user_cr_nf', (s.user_cr_f || 0) * 1e9); setValue('user_lm_uh', (s.user_lm_h || 0) * 1e6);
   setValue('pout_kw', s.pout_w / 1000); setValue('fr_khz', s.resonant_frequency_hz / 1000);
   setValue('fmin_khz', s.minimum_frequency_hz / 1000); setValue('fmax_khz', s.maximum_frequency_hz / 1000);
   setValue('primary_deadtime_ns', s.primary_deadtime_s * 1e9); setValue('bus_cap_uf', s.bus_capacitance_f * 1e6);
+  setSelect('parameter_mode', d.parameter_modes || ['AUTO_DESIGN','USER_DEFINED'], s.parameter_mode || 'AUTO_DESIGN');
   setSelect('primary_topology', d.topologies, s.primary_topology);
   setSelect('primary_device', d.primary_devices, s.primary_device);
   setSelect('sr_device', d.sr_devices, s.sr_device);
@@ -75,6 +77,7 @@ function specFromForm() {
     vbus_hold_end_v: val('vbus_hold_end_v'), vout_v: val('vout_v'), pout_w: val('pout_kw') * 1000,
     resonant_frequency_hz: val('fr_khz') * 1000, minimum_frequency_hz: val('fmin_khz') * 1000,
     maximum_frequency_hz: val('fmax_khz') * 1000, ln_ratio: val('ln_ratio'), q_full_load: val('q_full_load'),
+    parameter_mode: $('parameter_mode').value, user_lr_h: val('user_lr_uh') * 1e-6, user_cr_f: val('user_cr_nf') * 1e-9, user_lm_h: val('user_lm_uh') * 1e-6,
     primary_turns: val('primary_turns'), secondary_turns: val('secondary_turns'),
     primary_topology: $('primary_topology').value, primary_device: $('primary_device').value,
     sr_device: $('sr_device').value, primary_deadtime_s: val('primary_deadtime_ns') * 1e-9,

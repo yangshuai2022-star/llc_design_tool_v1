@@ -7,7 +7,7 @@ from enum import Enum
 import json
 from pathlib import Path
 
-from .spec import LLCDesignSpec, PrimaryTopology, SecondaryTopology
+from .spec import LLCDesignSpec, PrimaryTopology, SecondaryTopology, TankParameterMode
 
 
 def _normalize(data: dict) -> dict:
@@ -16,6 +16,8 @@ def _normalize(data: dict) -> dict:
         normalized["primary_topology"] = PrimaryTopology(normalized["primary_topology"])
     if "secondary_topology" in normalized:
         normalized["secondary_topology"] = SecondaryTopology(normalized["secondary_topology"])
+    if "parameter_mode" in normalized:
+        normalized["parameter_mode"] = TankParameterMode(normalized["parameter_mode"])
     return normalized
 
 

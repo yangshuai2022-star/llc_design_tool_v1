@@ -50,11 +50,15 @@
         <section class="group">
           <h3>谐振腔与变压器</h3>
           <div class="form-grid">
+            <label>参数来源 <span>—</span><select id="parameter_mode"></select></label>
             <label>谐振频率 fr <span>kHz</span><input id="fr_khz" type="number" step="1"></label>
             <label>最低频率 fmin <span>kHz</span><input id="fmin_khz" type="number" step="1"></label>
             <label>最高频率 fmax <span>kHz</span><input id="fmax_khz" type="number" step="1"></label>
             <label>Ln = Lm/Lr <span>—</span><input id="ln_ratio" type="number" step="0.1"></label>
             <label>Q @ 满载 <span>—</span><input id="q_full_load" type="number" step="0.01"></label>
+            <label>User Lr <span>µH</span><input id="user_lr_uh" type="number" step="0.01"></label>
+            <label>User Cr <span>nF</span><input id="user_cr_nf" type="number" step="0.01"></label>
+            <label>User Lm <span>µH</span><input id="user_lm_uh" type="number" step="0.01"></label>
             <label>原边匝数 Np <span>T</span><input id="primary_turns" type="number" step="1"></label>
             <label>副边匝数 Ns <span>T</span><input id="secondary_turns" type="number" step="1"></label>
             <label>原边拓扑 <span>—</span><select id="primary_topology"></select></label>
