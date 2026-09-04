@@ -48,7 +48,9 @@ jobs:
         run: |
           python -m PyInstaller --noconfirm --clean --windowed --name PowerDesignTool \
             --collect-data llc_design --collect-data pfc_design --collect-data power_codegen \
+            --collect-data power_control_tools \
             --collect-submodules llc_design --collect-submodules pfc_design --collect-submodules power_codegen \
+            --collect-submodules power_control_tools \
             packaging/launcher.py
         shell: bash
 
@@ -78,18 +80,16 @@ jobs:
           files: ${{ matrix.zip-name }}
           generate_release_notes: true
           body: |
-            Power Design Toolkit V8.2 双平台安装包（自动构建）
+            Power Design Toolkit V8.3.0 双平台安装包（自动构建）
 
-            ## V8.2 主要功能（在 V8.1 多保真核心之上增量）
-            - DCM ON+/OPEN/ON− 互补整流求解器：轻载断续边界自适应、互补性收敛诊断
-            - Golden-waveform 数字 SR：导通时序、Qrr/第三象限损耗、SR LUT 与 C99 导出
-            - Golden-waveform 磁性分析：铁芯/铜损/寄生参数/热点温升
-            - 固定 90° 双相与固定 120° 三相 Interleaved LLC 引擎及 GUI 页面
-            - GUI 新增 SR 设计页与 Interleaved 页；CLI 新增 `v8-sr` / `v8-dcm` / `v8-magnetics` / `interleaved`
-            - 启动脚本重命名与修复：`OPEN_GUI_WIN.bat` / `OPEN_GUI_MACOS.command` / `run_gui.sh`（venv 优先、Python≥3.10 校验、`[gui]` 依赖自装、CRLF/LF 规范）
-            - 保留 V8.1：统一 FHA / 非线性多谐波 HB / 分段时域接口、Golden Waveform、模型比较与导出
-            - 保留 V7：LLC 谐振腔/Q-ZVS/磁件/损耗/波形/数字控制；单相 TTPL PFC 与三相 Vienna PFC；LLC/TTPL/Vienna C99 Float32 控制代码生成
-            - GUI 自动适配 Windows 11 深色/浅色主题；工具栏“检查更新”与联系方式
+            ## V8.3 主要功能（在 V8.2 多保真核心之上增量）
+            - LLC 参数双模式：Auto Design / User Defined（通真保留 Lr/Cr/Lm/Np/Ns）
+            - 固定 90° 双相 Interleaved LLC 电气/均流模型
+            - power_control_tools：S2Z 离散化（Tustin / 预畸变 / 后向欧拉）、IIR/FIR 滤波器（Butterworth/Bessel/Chebyshev/Elliptic/Notch/FIR/MA/DC-Blocker）、Bode / 群延迟 / 阶跃 / 脉冲 / 零极点分析、C99 float32_t 单文件 DF2T/SOS 导出
+            - 控制器扩展：PI（Kp·(1+1/(Ti·s))）、PIF、PID、PIDF、模拟 Type-II / Type-III（Pole-Zero 与 R/C 参数化）
+            - Controller 与 Filter 设计器分页；实时 H(s)/H(z)
+            - 3 相 120° LLC MVP（专用 Y 联结 / 共享六脉整流 FHA；3P TD/HB 参考求解器带收敛告警；非线性 3P 高保真求解器仍为 WIP，非最终 signoff 模型）
+            - 修复 Control Tools GUI 构造时序竞态（filter_impl AttributeError）
 
             ## Windows 11
             1. 解压 `PowerDesignTool-Windows-x64.zip`
@@ -102,11 +102,41 @@ jobs:
                - 或右键点击 `PowerDesignTool.app` 选 "打开" → 再点 "打开"
             3. 双击 `PowerDesignTool.app` 启动；或源码目录双击 `OPEN_GUI_MACOS.command`
 
-            ## 使用
-            - 启动后先选择 LLC 或 PFC 工作区，工具栏可随时切换
-            - LLC SR：`python -m llc_design v8-sr --load 1.0`
-            - LLC DCM：`python -m llc_design v8-dcm --load 0.1 --samples 512`
-            - Interleaved：`python -m llc_design interleaved --phases 2`（或 `--phases 3`）
-            - 单相 PFC CLI：`pfc-control-lab --output output/ttpl`
-            - Vienna CLI：`vienna-control-lab --output output/vienna`
-            - C99 代码生成：`python -m power_codegen --help`
+            ## 源码
+            - 发布页同时附带源码 ZIP：`PowerDesignTool-src-<tag>.zip`（含 wheel）
+
+  source-zip:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build wheel
+        run: python -m pip wheel --no-deps --wheel-dir artifacts .
+
+      - name: Package source ZIP
+        env:
+          SRC_PKG: PowerDesignTool-src-${{ github.ref_name }}
+        run: |
+          set -eu
+          git archive --format=zip --prefix="$SRC_PKG/" -o "$SRC_PKG.zip" HEAD
+          WHEEL=$(ls artifacts/*.whl | head -1)
+          python - "$SRC_PKG.zip" "$SRC_PKG" "$WHEEL" <<'PY'
+          import sys, zipfile
+          out, pkg, wheel = sys.argv[1:4]
+          with zipfile.ZipFile(out, "a") as z:
+              z.write(wheel, pkg + "/artifacts/" + wheel.split("/")[-1])
+          print("appended", wheel)
+          PY
+
+      - name: Upload source ZIP to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: PowerDesignTool-src-${{ github.ref_name }}.zip
