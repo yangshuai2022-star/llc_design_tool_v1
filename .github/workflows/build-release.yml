@@ -2,14 +2,46 @@ name: build-release
 
 on:
   push:
+    branches: [main]
     tags: ["v*"]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  QT_QPA_PLATFORM: offscreen
+  MPLBACKEND: Agg
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto-cjk
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,web]"
+
+      - name: Run tests
+        run: python -m pytest
+
   build:
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    needs: test
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -39,7 +71,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install pyinstaller
-          python -m pip install -e ".[gui,dev]"
+          python -m pip install -e ".[gui,dev,web]"
 
       - name: Run tests
         run: python -m pytest
@@ -78,11 +110,19 @@ jobs:
           files: ${{ matrix.zip-name }}
           generate_release_notes: true
           body: |
-            Power Design Toolkit V8.1 双平台安装包（自动构建）
+            Power Design Toolkit V9.1 双平台安装包（自动构建）
 
-            ## V8.1 主要功能
-            - LLC V8.0 统一 FHA / 多谐波 HB / 分段时域分析接口与 Golden Waveform 数据层
-            - LLC V8.1 自洽非线性多谐波求解、精确换向零点投影、模型误差对比与 CSV/JSON/Markdown 导出
+            ## 本次新增与修复
+            - LLC 公式 PDF：公式、代入值、单位、结果与模型边界；GUI 一键导出
+            - 版本化工程 JSON：输入、结果摘要和数据来源
+            - 修复已升级后重复提醒，记住已忽略版本
+            - 修复控制工具页签初始化异常；补齐 Excel/API 依赖与回归测试
+            - 本机测试 315 passed、2 xfailed；示例 PDF 逐页检查
+            - 完整说明与已知限制：[V9.1.0 发布说明](https://github.com/yangshuai2022-star/llc_design_tool_v1/blob/v9.1.0/DC/release_v9.1.0.md)
+
+            ## V9.1 主要功能
+            - LLC 统一 FHA / 多谐波 HB / 分段时域分析接口与 Golden Waveform 数据层
+            - LLC 自洽非线性多谐波求解、精确换向零点投影、模型误差对比与 CSV/JSON/Markdown 导出
             - GUI 新增 FHA / HB / TD 对比页与多谐波 HB 波形入口；CLI 新增 `model-compare`
             - GUI 自动适配 Windows 11 深色/浅色主题：启动时检测系统外观并切换配色，
               解决深色主题下浅色背景 + 跟随系统的浅色文字导致整屏不可见的问题

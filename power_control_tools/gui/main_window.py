@@ -143,9 +143,10 @@ class ControlToolsMainWindow(QMainWindow):
         f.addRow("Fs", self.fs); f.addRow("S→Z", self.method); f.addRow("Prewarp", self.prewarp)
         self.sampling_form = f; v.addWidget(g)
 
-        self.design_pages = QTabWidget(); self.design_pages.currentChanged.connect(lambda *_: self._changed())
+        self.design_pages = QTabWidget()
         self.design_pages.addTab(self._build_controller_page(), "Controller")
         self.design_pages.addTab(self._build_filter_page(), "Filter Designer")
+        self.design_pages.currentChanged.connect(lambda *_: self._changed())
         v.addWidget(self.design_pages)
 
         # Always-visible immediate feedback, intentionally placed directly under

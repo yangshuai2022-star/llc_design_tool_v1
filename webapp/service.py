@@ -81,7 +81,11 @@ def _jsonable(value: Any) -> Any:
 
 def default_payload() -> dict[str, Any]:
     spec = LLCDesignSpec()
-    fields = {name: _jsonable(getattr(spec, name)) for name in sorted(_ALLOWED_FIELDS)}
+    fields = {
+        name: _jsonable(getattr(spec, name))
+        for name in sorted(_ALLOWED_FIELDS)
+        if getattr(spec, name) is not None
+    }
     db = DeviceDatabase()
     return {
         "spec": fields,

@@ -7,6 +7,7 @@ def test_defaults_are_web_safe():
     assert payload["spec"]["vbus_nom_v"] == 400.0
     assert "FULL_BRIDGE" in payload["topologies"]
     assert payload["primary_devices"]
+    spec_from_payload(payload["spec"])
 
 
 def test_baseline_analysis_matches_engineering_kernel():

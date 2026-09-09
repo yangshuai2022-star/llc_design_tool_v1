@@ -1,3 +1,3 @@
 """LLC half/full-bridge resonant converter design and optimization tool."""
 
-__version__ = "8.2.0"
+__version__ = "9.1.0"

@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from ..core.config import create_project_document
 from ..models.system import SystemAnalysis
 from ..magnetics.core import CoreDatabase
 from ..plotting.plots import create_all_plots
@@ -232,8 +233,8 @@ def export_calculation_book(analysis: SystemAnalysis,
     pd.DataFrame([asdict(x) for x in analysis.resonant_inductor.alternatives]).to_csv(
         paths["inductor_candidates_csv"], index=False)
     paths["result_json"] = out / "analysis.json"
-    payload = {
-        "spec": _jsonable(asdict(analysis.spec)),
+    payload = create_project_document(analysis.spec, analysis)
+    payload.update({
         "tank": _jsonable(asdict(analysis.tank)),
         "transformer": _jsonable(asdict(analysis.transformer)),
         "resonant_inductor": _jsonable(asdict(analysis.resonant_inductor)),
@@ -242,7 +243,7 @@ def export_calculation_book(analysis: SystemAnalysis,
         "feasibility_reasons": list(analysis.feasibility_reasons),
         "warnings": list(analysis.warnings),
         "operating_points": rows,
-    }
+    })
     paths["result_json"].write_text(json.dumps(payload, ensure_ascii=False, indent=2),
                                     encoding="utf-8")
     for plot_path in create_all_plots(analysis, out):

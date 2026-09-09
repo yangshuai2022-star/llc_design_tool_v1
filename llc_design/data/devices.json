@@ -1,6 +1,11 @@
 {
   "metadata": {
-    "status": "engineering_reference_only",
+    "schema_version": "1.0",
+    "source": "Bundled synthetic reference device records; no manufacturer part-number datasheet is claimed.",
+    "provenance": "Values are engineering placeholders for comparative calculations. Records inherit this metadata unless they provide an explicit provenance override.",
+    "status": "UNKNOWN",
+    "verified_for_hardware": false,
+    "library_status": "engineering_reference_only",
     "warning": "Replace reference records with selected-device datasheet curves before hardware release."
   },
   "primary_mosfets": [

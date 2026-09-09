@@ -1,4 +1,4 @@
-# Power Design Toolkit V9
+# Power Design Toolkit V9.1.0
 
 Integrated engineering design and control-analysis toolkit for:
 
@@ -44,6 +44,12 @@ Legend: 🚀 Feature · 🐛 Bugfix · 🎨 GUI/UX · 🧪 Test/CI/Build
 | 2026-09-03 / V8.2 | ⚡ | 新增固定 90° 双相与固定 120° 三相 Interleaved LLC 引擎及 GUI 页面 |
 | 2026-09-03 / V8.1 | 🚀 | 新增自洽非线性多谐波 HB（1/3/5/7 次自适应）、精确换向零点投影、FHA/HB/分段时域比较、CLI/GUI 与导出 |
 | 2026-09-03 / V8.1 | 🧪 | 新增多谐波物理一致性、轻载分支降级、Golden 参考选择和导出回归测试；完成全仓库测试与 wheel 构建 |
+| 2026-09-09 / V9.1.0 | 🚀 | LLC 公式 PDF 计算书：公式、数值代入、单位、结果与模型边界；支持自动设计和自定义谐振参数，GUI 一键导出 |
+| 2026-09-09 / V9.1.0 | 🚀 | 版本化工程 JSON 保存，包含输入、计算摘要和工程参考数据来源；兼容旧参数文件 |
+| 2026-09-09 / V9.1.0 | 🐛 | 统一更新检查版本号，正确比较 SemVer，记住已忽略版本；修复控制工具页签初始化异常 |
+| 2026-09-09 / V9.1.0 | 🧪 | 补齐 Excel/API 测试依赖，增加公式报告、工程保存、数据来源和 GUI 启动回归；本机 315 项通过、2 项预期失败 |
+
+本版使用说明与已知限制见 [V9.1.0 发布说明](DC/release_v9.1.0.md)。
 
 ## Install
 

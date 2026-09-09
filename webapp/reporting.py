@@ -13,7 +13,9 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from fpdf import FPDF  # noqa: E402
+from fpdf import FPDF
+
+from llc_design import __version__
 
 from .service import analyze_llc
 
@@ -71,7 +73,7 @@ def _gain_map_png(result: dict[str, Any]) -> bytes:
             curve["gain"],
             color=color,
             linewidth=1.4,
-            label=f"{int(round(curve['load_fraction'] * 100))}% load",
+            label=f"{round(curve['load_fraction'] * 100)}% load",
         )
     for target in gain_map["targets"]:
         ax.axhline(target["gain"], color="#8a8f98", linewidth=0.8, linestyle="--", alpha=0.7)
@@ -212,7 +214,14 @@ def build_pdf_report(spec_payload: dict[str, Any], project: str = "", engineer: 
     pdf.cell(0, 9, "LLC Resonant Converter Design Report", align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(180, 200, 226)
-    pdf.cell(0, 6, "Power Design Toolkit  ·  V8.1 Web", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(
+        0,
+        6,
+        f"Power Design Toolkit  ·  V{__version__} Web",
+        align="C",
+        new_x="LMARGIN",
+        new_y="NEXT",
+    )
     pdf.set_y(40)
     pdf.set_text_color(20, 26, 38)
     pdf.set_font("Helvetica", "", 9)

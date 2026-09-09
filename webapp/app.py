@@ -8,39 +8,24 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-
-from .reporting import build_excel_report, build_pdf_report
-from .service import analyze_llc, core_catalog, default_payload, optimize_llc
 
 from backend.api.control import router as control_router
+from llc_design import __version__
+
+from .reporting import build_excel_report, build_pdf_report
+from .schemas import LLCAnalyzeRequest, OptimizeRequest, ReportRequest
+from .service import analyze_llc, core_catalog, default_payload, optimize_llc
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"
 
 app = FastAPI(
     title="Power Design Toolkit Web",
-    version="0.2.0",
+    version=__version__,
     description="Server-side Python LLC engineering calculation API and browser UI.",
 )
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 app.include_router(control_router)
-
-
-class LLCAnalyzeRequest(BaseModel):
-    spec: dict[str, Any]
-
-
-class ReportRequest(BaseModel):
-    spec: dict[str, Any] = {}
-    project: str = ""
-    engineer: str = ""
-
-
-class OptimizeRequest(BaseModel):
-    spec: dict[str, Any] = {}
-    sweep: dict[str, Any] = {}
-    weights: dict[str, Any] = {}
 
 
 @app.get("/", include_in_schema=False)
@@ -61,7 +46,7 @@ def llc_defaults() -> dict[str, Any]:
 @app.post("/api/llc/analyze")
 def llc_analyze(request: LLCAnalyzeRequest) -> dict[str, Any]:
     try:
-        return analyze_llc(request.spec)
+        return analyze_llc(request.spec.service_payload())
     except (ValueError, KeyError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
@@ -77,7 +62,7 @@ def llc_cores() -> dict[str, Any]:
 @app.post("/api/llc/optimize")
 def llc_optimize(request: OptimizeRequest) -> dict[str, Any]:
     try:
-        return optimize_llc(request.model_dump())
+        return optimize_llc(request.service_payload())
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
@@ -86,7 +71,11 @@ def llc_optimize(request: OptimizeRequest) -> dict[str, Any]:
 
 @app.post("/api/llc/report")
 def llc_report(request: ReportRequest) -> Response:
-    pdf = build_pdf_report(request.spec, project=request.project, engineer=request.engineer)
+    pdf = build_pdf_report(
+        request.spec.service_payload(),
+        project=request.project,
+        engineer=request.engineer,
+    )
     return Response(
         pdf,
         media_type="application/pdf",
@@ -96,7 +85,7 @@ def llc_report(request: ReportRequest) -> Response:
 
 @app.post("/api/llc/report.xlsx")
 def llc_report_xlsx(request: LLCAnalyzeRequest) -> Response:
-    xlsx = build_excel_report(request.spec)
+    xlsx = build_excel_report(request.spec.service_payload())
     return Response(
         xlsx,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

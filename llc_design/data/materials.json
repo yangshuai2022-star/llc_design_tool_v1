@@ -1,6 +1,11 @@
 {
   "metadata": {
-    "status": "engineering_reference_curves",
+    "schema_version": "1.0",
+    "source": "Bundled engineering curve fits; exact source curves and fitting records are not stored in this repository.",
+    "provenance": "Coefficients are comparative reference fits. Records inherit this metadata unless they provide an explicit provenance override.",
+    "status": "UNKNOWN",
+    "verified_for_hardware": false,
+    "library_status": "engineering_reference_curves",
     "warning": "The bundled material coefficients are reference fits intended for comparative optimization. Replace them with coefficients fitted from the exact manufacturer loss curves, core lot and temperature range before production release.",
     "models": ["Steinmetz", "iGSE arbitrary waveform", "temperature interpolation"]
   },

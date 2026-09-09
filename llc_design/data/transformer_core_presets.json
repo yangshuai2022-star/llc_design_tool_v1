@@ -1,6 +1,10 @@
 {
   "metadata": {
+    "schema_version": "1.0",
     "source": "TDK PQ35/35 B65881A core + B65882B coil former datasheet, October 2022",
+    "provenance": "Geometry and single-point material values are transcribed from the named datasheets; the editable winding helper and full loss fit are not independently verified.",
+    "status": "UNKNOWN",
+    "verified_for_hardware": false,
     "note": "Ae/Amin/le/Ve and material AL/mue/Pv values are datasheet values.  The usable winding width is an editable geometric helper taken from the coil-former drawing; verify against the exact bobbin and insulation build."
   },
   "presets": [

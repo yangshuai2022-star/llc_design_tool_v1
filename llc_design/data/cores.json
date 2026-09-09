@@ -1,6 +1,11 @@
 {
   "metadata": {
-    "status": "standard_geometry_reference_library",
+    "schema_version": "1.0",
+    "source": "Bundled generic core-family geometry records; exact manufacturer ordering-code sources are not recorded.",
+    "provenance": "Values support early design and automated screening. Records inherit this metadata unless they provide an explicit provenance override.",
+    "status": "UNKNOWN",
+    "verified_for_hardware": false,
+    "library_status": "standard_geometry_reference_library",
     "warning": "Geometry values are engineering reference values for early design and automated screening. Verify the exact core half, bobbin, effective parameters, tolerances and available gap against the selected manufacturer ordering code.",
     "families": ["PQ", "EE/E", "EC", "EER", "ETD"]
   },

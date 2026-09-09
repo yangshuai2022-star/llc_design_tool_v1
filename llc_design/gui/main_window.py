@@ -51,7 +51,7 @@ from ..analysis import (
 from ..control.analysis import SmallSignalAnalysis, build_small_signal_analysis
 from ..control.digital_loop import DigitalLoopAnalysis, build_digital_loop_analysis
 from ..control.linearize import ControlInputKind
-from ..core.config import load_spec, save_spec
+from ..core.config import load_spec, save_project
 from ..core.spec import LLCDesignSpec, PrimaryTopology, TankParameterMode
 from ..core.tank import design_tank, equivalent_ac_load_ohm, gain, target_gain
 from ..core.q_zvs import LLCQZVSAnalysis, build_q_zvs_analysis
@@ -65,6 +65,7 @@ from ..magnetics.transformer_designer import (FerriteCoreInput, TransformerSynth
 from ..models.devices import DeviceDatabase
 from ..switching.sr import analyze_sr
 from ..multiphase import solve_interleaved_llc
+from ..report.formula_pdf import build_formula_pdf
 from .workers import FunctionWorker
 from .updater import add_toolbar_right_side, check_for_updates
 from . import theme
@@ -116,7 +117,8 @@ class LLCMainWindow(QMainWindow):
 
         for label, callback in (
             ("加载 JSON", self.load_json),
-            ("保存 JSON", self.save_json),
+            ("保存工程 JSON", self.save_json),
+            ("导出公式 PDF", self.export_formula_pdf),
             ("输出目录", self.choose_output_directory),
         ):
             action = QAction(label, self)
@@ -650,7 +652,12 @@ class LLCMainWindow(QMainWindow):
             return
         try:
             self.spec = self._spec_from_widgets()
-            save_spec(self.spec, path)
+            analysis = (
+                self.system_analysis
+                if self.system_analysis and self.system_analysis.spec == self.spec
+                else None
+            )
+            save_project(self.spec, path, analysis)
             self._append_log(f"Saved: {path}")
         except Exception as exc:
             QMessageBox.critical(self, "保存失败", str(exc))
@@ -660,6 +667,37 @@ class LLCMainWindow(QMainWindow):
         if path:
             self.output_directory = Path(path)
             self.statusBar().showMessage(f"输出目录：{path}")
+
+    def export_formula_pdf(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "导出 LLC 公式计算书",
+            str(self.output_directory / "LLC_formula_worksheet.pdf"),
+            "PDF (*.pdf)",
+        )
+        if not path:
+            return
+        try:
+            self.spec = self._spec_from_widgets()
+        except Exception as exc:
+            QMessageBox.warning(self, "参数错误", str(exc))
+            return
+        analysis = (
+            self.system_analysis
+            if self.system_analysis and self.system_analysis.spec == self.spec
+            else None
+        )
+        self._run_worker(
+            "正在生成公式计算书…",
+            lambda: build_formula_pdf(
+                analysis or LLCSystemAnalyzer().analyze(self.spec), path
+            ),
+            self._formula_pdf_ready,
+        )
+
+    def _formula_pdf_ready(self, path: Path) -> None:
+        self._append_log(f"Formula worksheet exported: {path}")
+        self.statusBar().showMessage(f"公式计算书已导出：{path}", 8000)
 
     def show_about(self) -> None:
         QMessageBox.about(
