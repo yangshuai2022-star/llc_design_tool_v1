@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0",
+  "case_id": "LLC_400V_53V_3kW",
+  "title": "400 V to 53 V / 3 kW LLC software reference design",
+  "topology": "full-bridge LLC with full-bridge synchronous rectification",
+  "canonical_input": "llc_design/examples/baseline_400V_53V_3kW.json",
+  "hardware_release_ready": false,
+  "evidence": [
+    {
+      "id": "input-spec",
+      "status": "VERIFIED",
+      "scope": "traceable repository input artifact",
+      "artifact": "llc_design/examples/baseline_400V_53V_3kW.json",
+      "verified_for_hardware": false
+    },
+    {
+      "id": "python-regression",
+      "status": "VERIFIED",
+      "scope": "repository-controlled numerical regression only",
+      "artifact": "llc_design/tests/test_validation.py",
+      "verified_for_hardware": false
+    },
+    {
+      "id": "multifidelity-correlation",
+      "status": "VERIFIED",
+      "scope": "internal FHA / HB / switched-time-domain software comparison",
+      "artifact": "release_validation/V8_1_baseline/model_comparison.json",
+      "verified_for_hardware": false
+    },
+    {
+      "id": "ngspice-runtime",
+      "status": "VERIFIED",
+      "scope": "real ngspice/libngspice execution and integration plumbing; not semiconductor-model accuracy",
+      "artifact": ".github/workflows/ngspice-smoke.yml",
+      "verified_for_hardware": false
+    },
+    {
+      "id": "bench-measurement",
+      "status": "UNKNOWN",
+      "scope": "bench correlation at the stated operating condition",
+      "artifact": "reference_designs/LLC_400V_53V_3kW/measurement/README.md",
+      "verified_for_hardware": false
+    }
+  ],
+  "model_boundaries": [
+    "Software regression demonstrates reproducibility, not component sign-off.",
+    "Internal model agreement does not prove magnetic-loss, thermal, semiconductor-stress, or safety accuracy.",
+    "ngspice evidence currently validates execution plumbing and switching correlation boundaries, not vendor device-model accuracy.",
+    "No bench correlation is claimed by this case yet."
+  ],
+  "falsification_conditions": [
+    "The canonical input no longer reproduces the maintained regression within tolerance.",
+    "A cited artifact is removed, corrupted, or cannot reproduce its stated claim.",
+    "A higher-fidelity model contradicts the lower-fidelity result outside the documented tolerance.",
+    "Bench measurement contradicts the software claim outside the approved correlation tolerance.",
+    "The operating condition leaves the range covered by the cited evidence."
+  ]
+}
