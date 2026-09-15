@@ -1,7 +1,7 @@
 [project]
 name = "power-design-toolkit"
 version = "9.2.2"
-description = "Integrated power-electronics design toolkit with LLC/PFC engineering, digital control tools and closed-loop stability analysis"
+description = "Open-source power electronics CAE toolkit for LLC, PFC, FRA, digital control, C99 code generation and switching verification"
 license = {text = "GPL-3.0-only"}
 requires-python = ">=3.10"
 dependencies = [
@@ -18,6 +18,7 @@ dependencies = [
 dev = ["pytest>=7", "pytest-cov", "mypy", "ruff", "httpx2>=2.12,<3"]
 gui = ["PySide6>=6.7", "pyqtgraph>=0.13.7"]
 web = ["fastapi>=0.141,<1", "uvicorn[standard]>=0.30,<1", "openpyxl>=3.1,<4"]
+agent = ["mcp>=2,<3"]
 
 [project.scripts]
 pfc-design = "pfc_design.__main__:cli"
@@ -26,6 +27,7 @@ vienna-control-lab = "pfc_design.vienna_cli:cli"
 power-control-codegen = "power_codegen.cli:cli"
 power-design-gui = "llc_design.gui.app:run_gui"
 power-design-web = "webapp.app:run"
+power-design-mcp = "power_agent.mcp_server:main"
 llc-design = "llc_design.__main__:cli"
 power-control-tools = "power_control_tools.__main__:cli"
 llc-gui = "llc_design.gui.app:run_gui"
@@ -36,7 +38,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["pfc_design*", "llc_design*", "power_codegen*", "power_control_tools*", "power_sim*", "webapp*", "backend*"]
+include = ["pfc_design*", "llc_design*", "power_codegen*", "power_control_tools*", "power_sim*", "power_agent*", "webapp*", "backend*"]
 exclude = ["*.output*", "*.__pycache__*"]
 
 [tool.setuptools.package-data]
@@ -45,5 +47,5 @@ exclude = ["*.output*", "*.__pycache__*"]
 "webapp" = ["static/*"]
 
 [tool.pytest.ini_options]
-testpaths = ["pfc_design/tests", "llc_design/tests", "power_codegen/tests", "power_control_tools/tests", "power_sim/tests", "webapp/tests", "backend/tests"]
+testpaths = ["pfc_design/tests", "llc_design/tests", "power_codegen/tests", "power_control_tools/tests", "power_sim/tests", "power_agent/tests", "webapp/tests", "backend/tests"]
 addopts = "-q"
