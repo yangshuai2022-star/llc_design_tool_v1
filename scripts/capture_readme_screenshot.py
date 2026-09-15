@@ -1,6 +1,6 @@
 """Capture a real launcher screenshot for README/documentation.
 
-This renders the actual Qt launcher offscreen.  It is intentionally not a mock
+This renders the actual Qt launcher offscreen. It is intentionally not a mock
 or a hand-drawn replacement for the application UI.
 """
 
@@ -17,17 +17,20 @@ from PySide6.QtWidgets import QApplication
 from llc_design.gui import theme
 from llc_design.gui.i18n_ui import apply_language, bind_window
 from llc_design.gui.launcher import WorkspaceSelectionDialog
+from llc_design.i18n import set_language
 
 
 def capture(path: Path, language: str = "en") -> Path:
     app = QApplication.instance() or QApplication(["capture-readme-screenshot"])
     app.setApplicationName("Power Design Toolkit")
+
+    # The selector contains a few QLabel strings that are translated at
+    # construction time rather than rebound later. Select the requested
+    # language *before* constructing the dialog so a generated English/Japanese/
+    # Korean screenshot cannot silently retain Chinese title/subtitle text.
+    set_language(language, notify=False)
     theme.apply_app_theme(app)
 
-    # WorkspaceSelectionDialog is a short-lived launcher rather than one of the
-    # persistent workspaces, so register/bind it explicitly before applying the
-    # requested language.  Otherwise the screenshot could silently stay in the
-    # source language even when --language en/ja/ko was requested.
     dialog = WorkspaceSelectionDialog()
     bind_window(dialog)
     apply_language(language, app)
