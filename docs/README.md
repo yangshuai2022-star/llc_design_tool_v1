@@ -6,7 +6,9 @@ The repository used to accumulate release snapshots, one-off migration notes, te
 
 - `README.md` — product overview, quick start and current capability map.
 - `CHANGELOG.md` — concise version history.
-- `docs/` — current engineering architecture, model boundaries, validation and deployment.
+- `docs/` — current engineering architecture, model boundaries, validation, provenance, Agent integration and deployment.
+- `reference_designs/` — traceable engineering cases and evidence matrices.
+- `engineering_data/` — cross-workspace catalog for device/material/core data quality.
 - GitHub Issues / Pull Requests / Actions / Releases — development history, CI logs and binary artifacts.
 - `release_validation/` — numerical baselines that are part of regression evidence, not narrative documentation.
 
@@ -19,7 +21,11 @@ The repository used to accumulate release snapshots, one-off migration notes, te
 | [FRA_LOOP_DESIGNER.md](FRA_LOOP_DESIGNER.md) | FRA import semantics, controller de-embedding, stability metrics, Auto Design and model identification |
 | [NGSPICE_CLOSED_LOOP.md](NGSPICE_CLOSED_LOOP.md) | Circuit IR, batch/shared ngspice architecture, exact digital-control execution and model boundary |
 | [ENGINEERING_VALIDATION.md](ENGINEERING_VALIDATION.md) | Evidence levels and what software regression does or does not prove |
+| [PROJECT_PROVENANCE.md](PROJECT_PROVENANCE.md) | Common project JSON provenance/evidence envelope and falsification rules |
+| [ENGINEERING_DATA.md](ENGINEERING_DATA.md) | Device, core and material database provenance/release policy |
+| [AGENT_MCP.md](AGENT_MCP.md) | MCP v2 Agent interface and deterministic-kernel boundary |
 | [WEB_DEPLOYMENT.md](WEB_DEPLOYMENT.md) | FastAPI/web architecture, local execution and deployment |
+| [../reference_designs/README.md](../reference_designs/README.md) | Reference-design evidence contract and current cases |
 | [../CHANGELOG.md](../CHANGELOG.md) | Current concise version history |
 
 ## Compatibility documents
@@ -36,5 +42,6 @@ A document belongs in the maintained set only if it answers one of these questio
 2. How is a current engineering algorithm implemented?
 3. What assumptions/model boundaries apply?
 4. How is a current feature installed, validated or deployed?
+5. What traceable evidence would prove or falsify an engineering claim?
 
 Per-version debugging logs, temporary patches, wheel files and CI result snapshots do not belong in the source documentation tree.
