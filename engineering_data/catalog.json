@@ -1,0 +1,82 @@
+{
+  "schema_version": "1.0",
+  "policy": "docs/ENGINEERING_DATA.md",
+  "datasets": [
+    {
+      "id": "llc-devices",
+      "domain": "LLC",
+      "kind": "semiconductor",
+      "path": "llc_design/data/devices.json",
+      "status": "UNKNOWN",
+      "verified_for_hardware": false,
+      "provenance_contract": "embedded-metadata",
+      "note": "Synthetic/reference device records for comparative engineering calculations."
+    },
+    {
+      "id": "llc-cores",
+      "domain": "LLC",
+      "kind": "magnetic-core",
+      "path": "llc_design/data/cores.json",
+      "status": "UNKNOWN",
+      "verified_for_hardware": false,
+      "provenance_contract": "embedded-metadata",
+      "note": "Generic core-family geometry records for early design and screening."
+    },
+    {
+      "id": "llc-materials",
+      "domain": "LLC",
+      "kind": "magnetic-material",
+      "path": "llc_design/data/materials.json",
+      "status": "UNKNOWN",
+      "verified_for_hardware": false,
+      "provenance_contract": "embedded-metadata"
+    },
+    {
+      "id": "llc-transformer-presets",
+      "domain": "LLC",
+      "kind": "magnetic-preset",
+      "path": "llc_design/data/transformer_core_presets.json",
+      "status": "UNKNOWN",
+      "verified_for_hardware": false,
+      "provenance_contract": "embedded-metadata"
+    },
+    {
+      "id": "pfc-mosfets",
+      "domain": "PFC",
+      "kind": "semiconductor",
+      "path": "pfc_design/data/mosfets.json",
+      "status": "UNKNOWN",
+      "verified_for_hardware": false,
+      "provenance_contract": "catalog-only",
+      "note": "Named part records exist, but dataset-level traceable source/revision/extraction metadata is not yet normalized."
+    },
+    {
+      "id": "pfc-diodes",
+      "domain": "PFC",
+      "kind": "semiconductor",
+      "path": "pfc_design/data/diodes.json",
+      "status": "UNKNOWN",
+      "verified_for_hardware": false,
+      "provenance_contract": "catalog-only"
+    },
+    {
+      "id": "pfc-cores",
+      "domain": "PFC",
+      "kind": "magnetic-core",
+      "path": "pfc_design/data/cores.json",
+      "status": "UNKNOWN",
+      "verified_for_hardware": false,
+      "provenance_contract": "catalog-only",
+      "note": "Some records include source URLs; URL presence alone is not treated as release verification."
+    },
+    {
+      "id": "pfc-steinmetz",
+      "domain": "PFC",
+      "kind": "magnetic-material-fit",
+      "path": "pfc_design/data/steinmetz_coefficients.json",
+      "status": "UNKNOWN",
+      "verified_for_hardware": false,
+      "provenance_contract": "catalog-only"
+    }
+  ]
+}
