@@ -15,7 +15,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtWidgets import QApplication
 
 from llc_design.gui import theme
-from llc_design.gui.i18n_ui import apply_language
+from llc_design.gui.i18n_ui import apply_language, bind_window
 from llc_design.gui.launcher import WorkspaceSelectionDialog
 
 
@@ -24,7 +24,12 @@ def capture(path: Path, language: str = "en") -> Path:
     app.setApplicationName("Power Design Toolkit")
     theme.apply_app_theme(app)
 
+    # WorkspaceSelectionDialog is a short-lived launcher rather than one of the
+    # persistent workspaces, so register/bind it explicitly before applying the
+    # requested language.  Otherwise the screenshot could silently stay in the
+    # source language even when --language en/ja/ko was requested.
     dialog = WorkspaceSelectionDialog()
+    bind_window(dialog)
     apply_language(language, app)
     dialog.show()
     app.processEvents()
