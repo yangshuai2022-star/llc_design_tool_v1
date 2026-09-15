@@ -6,6 +6,13 @@ This file keeps the **maintained product history**. Detailed debugging notes, on
 
 ### Added
 
+- evidence-driven `reference_designs/` contract and first `LLC_400V_53V_3kW` machine-readable evidence matrix;
+- common project/provenance JSON schema plus executable provenance validator and regression tests;
+- cross-workspace engineering-data catalog and device/magnetics evidence policy;
+- MCP v2 Agent foundation (`power-design-mcp`) that wraps shared deterministic engineering kernels rather than duplicating equations;
+- reproducible real Qt launcher screenshot capture script and CI screenshot artifact;
+- packaged application `--self-test` that constructs all four workspaces offscreen and validates bundled-data provenance;
+- release tag/package-version contract and dynamic release metadata;
 - shared-ngspice circuit-simulation foundation for LLC closed-loop verification;
 - backend-neutral Circuit IR and deterministic netlist generation;
 - batch ngspice ASCII RAW execution/parser;
@@ -14,9 +21,15 @@ This file keeps the **maintained product history**. Detailed debugging notes, on
 - standard `WaveformBundle` adapter for SPICE power/control traces;
 - real-ngspice CI smoke workflow.
 
+### Changed
+
+- README/product positioning now presents Power Design Toolkit as an evidence-driven power-electronics CAE + digital-control platform rather than a single LLC calculator;
+- release CI now runs the packaged executable instead of treating directory existence as a smoke test;
+- repository-level target name/description/topics are source-controlled in `.github/REPOSITORY_SETTINGS.md` for application through GitHub repository settings.
+
 ### Engineering boundary
 
-The ngspice V1 power stage is a switching-correlation model with small physical damping. It is not yet a vendor MOSFET/Coss/Qrr/SR switching-loss model.
+The ngspice V1 power stage is a switching-correlation model with small physical damping. It is not yet a vendor MOSFET/Coss/Qrr/SR switching-loss model. Agent/MCP outputs remain software-model evidence and do not imply hardware verification. Bench evidence in the first Reference Design remains `UNKNOWN` until traceable raw measurement data are supplied.
 
 ## 9.2.2 — 2026-09-15
 
