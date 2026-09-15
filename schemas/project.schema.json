@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://power-design-toolkit.local/schemas/project.schema.json",
+  "title": "Power Design Toolkit engineering project provenance envelope",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "toolkit_version",
+    "workspace",
+    "input",
+    "results",
+    "evidence",
+    "model_boundaries"
+  ],
+  "properties": {
+    "schema_version": {"type": "string", "minLength": 1},
+    "toolkit_version": {"type": "string", "minLength": 1},
+    "created_utc": {"type": "string"},
+    "workspace": {"type": "string", "minLength": 1},
+    "input": {"type": "object"},
+    "results": {"type": "object"},
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "locator"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "kind": {"type": "string", "minLength": 1},
+          "locator": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string"}
+        },
+        "additionalProperties": true
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["status", "scope", "verified_for_hardware"],
+        "properties": {
+          "status": {"enum": ["VERIFIED", "UNKNOWN"]},
+          "scope": {"type": "string", "minLength": 1},
+          "artifact": {"type": "string"},
+          "verified_for_hardware": {"type": "boolean"}
+        },
+        "additionalProperties": true
+      }
+    },
+    "model_boundaries": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "additionalProperties": true
+}
