@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import textwrap
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
@@ -96,8 +98,25 @@ class WorkspaceSelectionDialog(QDialog):
 
     @staticmethod
     def _choice_button(title: str, description: str) -> QPushButton:
+        """Create a launcher card whose localized description cannot overflow.
+
+        ``QPushButton`` does not word-wrap automatically.  English/Japanese/
+        Korean launcher text can therefore be wider than the 500 px card even
+        when the Chinese source fits.  Insert explicit line breaks at a bounded
+        character width; ``break_long_words`` also gives CJK text a safe path
+        because those scripts do not necessarily contain spaces.
+        """
+
         t = theme.active_theme()
-        button = QPushButton(f"{title}\n\n{description}")
+        wrapped_description = "\n".join(
+            textwrap.wrap(
+                description,
+                width=38,
+                break_long_words=True,
+                break_on_hyphens=False,
+            )
+        )
+        button = QPushButton(f"{title}\n\n{wrapped_description}")
         button.setMinimumSize(500, 170)
         button.setStyleSheet(
             "QPushButton {"
