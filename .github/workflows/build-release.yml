@@ -69,6 +69,23 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Validate tag matches package version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import tomllib
+          from pathlib import Path
+
+          version = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+          tag = os.environ["GITHUB_REF_NAME"]
+          expected = f"v{version}"
+          if tag != expected:
+              raise SystemExit(f"release tag/version mismatch: tag={tag!r}, expected={expected!r}")
+          print(f"release version contract OK: {tag}")
+          PY
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -87,9 +104,22 @@ jobs:
             packaging/launcher.py
         shell: bash
 
-      - name: Smoke test (import check on packaged app)
-        run: ls -la "${{ matrix.app-dir }}"
+      - name: Packaged application self-test (macOS)
+        if: runner.os == 'macOS'
         shell: bash
+        run: |
+          test -x "dist/PowerDesignTool.app/Contents/MacOS/PowerDesignTool"
+          QT_QPA_PLATFORM=offscreen "dist/PowerDesignTool.app/Contents/MacOS/PowerDesignTool" --self-test
+
+      - name: Packaged application self-test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $exe = "dist/PowerDesignTool/PowerDesignTool.exe"
+          if (-not (Test-Path $exe)) { throw "packaged executable not found: $exe" }
+          & $exe --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Zip macOS app
         if: runner.os == 'macOS'
@@ -113,58 +143,27 @@ jobs:
           files: ${{ matrix.zip-name }}
           generate_release_notes: true
           body: |
-            Power Design Toolkit V9.2.2 双平台安装包（自动构建）
+            # Power Design Toolkit ${{ github.ref_name }}
 
-            ## 本版重点：多语言界面
-            - 界面支持 **简体中文 / English / 日本語 / 한국어**
-            - 切换位置：任意工作区工具栏最右侧 **「语言 / Language」**，立即生效并记忆
-            - 界面原有的英文（Bode、H(z)、C99、Kp、PM、FRA…）按约定**保持原样不翻译**，
-              工程术语一致性优先
-            - **帮助按章节翻译**；未提供当前语言正文译文的章节会显示原文并明确提示
-            - **字体栈随语言切换**（日文 Meiryo / Yu Gothic、韩文 Malgun Gothic、
-              中文微软雅黑 / 思源），避免共用汉字被渲染成中文字形；图表字体同步
-            - 切换语言只改变界面文字，不影响任何计算结果、系数或导出内容
+            Automated Windows x64 and macOS Apple Silicon release artifacts.
 
-            ## V9.2.1 已包含（本版同样包含）
-            - 四个工作区工具栏「帮助」（F1）+ 功能选择页「使用说明 / 帮助 (F1)」
-            - 帮助内的**实现说明**：FHA/HB/TD 求解、数字环混合域与延时拆分、
-              采样链「采样块/固件块」不重复计数、Tustin/预畸变/后向欧拉映射、
-              C99 DF2T/SOS 递推式与系数符号、稳定性阈值、FRA 剥离与重建、
-              变量投影有理拟合、ZOH 闭环与系数对齐、Auto Design 合成流程
-            - **联系与支持**：邮箱 maileyang@qq.com、微信 maileyang、
-              公众号/技术博客「开关电源仿真与实用设计」（帮助内含二维码）
+            ## Release gates
+            - full Python regression suite passed;
+            - package version matches the Git tag;
+            - the packaged executable itself passed `--self-test`;
+            - all four GUI workspaces were constructed in offscreen mode;
+            - bundled engineering-data provenance passed structural validation.
 
-            ## 完整说明
-            [V9.2.2 发布说明](https://github.com/yangshuai2022-star/llc_design_tool_v1/blob/v9.2.2/DC/release_v9.2.2.md)
-            [V9.2.1 发布说明](https://github.com/yangshuai2022-star/llc_design_tool_v1/blob/v9.2.1/DC/release_v9.2.1.md)
+            Passing these gates demonstrates software reproducibility and package integrity only. It does **not** by itself establish hardware-release readiness; see `docs/ENGINEERING_VALIDATION.md`.
 
-            ## 主要功能
-            - LLC 谐振腔、Q/ZVS、磁件、损耗、波形、FHA/HB/时域多精度分析与数字电压环设计
-            - 单相 TTPL PFC 与三相 Vienna PFC 控制、Bode、AC 周期与开关波形、PF/THD 分析
-            - 数字控制工具：控制器/滤波器设计、Bode、Step/Impulse、P/Z、SOS 与单文件 C99 float32_t 导出
-            - FRA Loop Designer：实测频响整定、自动设计、模型辨识与辨识模型 × 控制器闭环分析
-            - LLC / TTPL / Vienna 平台无关 C99/Float32 控制代码生成
+            ## Install
+            **Windows 11**
+            1. Extract `PowerDesignTool-Windows-x64.zip`.
+            2. Run `PowerDesignTool.exe`.
 
-            ## 联系方式 / Contact
-            - 邮箱 maileyang@qq.com（有问题欢迎直接发邮件讨论）
-            - 微信 maileyang
-            - 公众号 / 技术博客：开关电源仿真与实用设计
+            **macOS (Apple Silicon)**
+            1. Extract `PowerDesignTool-macOS-arm64.zip`.
+            2. If macOS blocks the unsigned app, use Finder **Open**, or clear quarantine for the app you downloaded.
+            3. Run `PowerDesignTool.app`.
 
-            ## Windows 11
-            1. 解压 `PowerDesignTool-Windows-x64.zip`
-            2. 双击 `PowerDesignTool.exe` 即可运行
-
-            ## macOS (Apple Silicon)
-            1. 解压 `PowerDesignTool-macOS-arm64.zip`
-            2. 若提示 "Apple 无法验证" / "已损坏":
-               - 终端执行 `xattr -cr /Applications/PowerDesignTool.app`
-               - 或右键点击 `PowerDesignTool.app` 选 "打开" → 再点 "打开"
-            3. 双击 `PowerDesignTool.app` 启动
-
-            ## 使用
-            - 启动后选择 LLC / PFC / Control Tools / FRA Loop Designer 工作区；
-              任意工作区按 **F1** 查看帮助（含实现说明与模型边界）
-            - 语言：工具栏最右侧「语言 / Language」
-            - 单相 PFC CLI：`pfc-control-lab --output output/ttpl`
-            - Vienna CLI：`vienna-control-lab --output output/vienna`
-            - C99 代码生成：`python -m power_codegen --help`
+            The generated GitHub release notes below are the authoritative per-version change list.
