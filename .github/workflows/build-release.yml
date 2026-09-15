@@ -39,6 +39,16 @@ jobs:
       - name: Run tests
         run: python -m pytest
 
+      - name: Capture real launcher screenshot
+        run: python scripts/capture_readme_screenshot.py docs/assets/power-design-toolkit-overview.png --language en
+
+      - name: Upload README screenshot candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: readme-gui-screenshot
+          path: docs/assets/power-design-toolkit-overview.png
+          if-no-files-found: error
+
   build:
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     needs: test
